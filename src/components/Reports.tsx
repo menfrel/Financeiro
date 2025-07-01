@@ -99,13 +99,12 @@ export function Reports() {
 
   const loadInitialData = async () => {
     try {
-      // Verificar se o usuário está autenticado
       if (!user?.id) {
         console.error("Usuário não autenticado");
         return;
       }
 
-      // Load accounts - garantir isolamento por usuário
+      // Load accounts
       const { data: accountsData, error: accountsError } = await supabase
         .from("accounts")
         .select("*")
@@ -116,7 +115,7 @@ export function Reports() {
         console.error("Error loading accounts:", accountsError);
       }
 
-      // Load categories - garantir isolamento por usuário
+      // Load categories
       const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
         .select("*")
@@ -139,30 +138,45 @@ export function Reports() {
     try {
       setLoading(true);
 
-      // Verificar se o usuário está autenticado
       if (!user?.id) {
         console.error("Usuário não autenticado");
         setLoading(false);
         return;
       }
 
-      console.log("Loading report data for user:", user.id);
-      console.log("Date range:", filters.startDate, "to", filters.endDate);
+      console.log("=== RELATÓRIOS DEBUG ===");
+      console.log("User ID:", user.id);
+      console.log("Filtros aplicados:", filters);
 
-      // Construir query base para transações
+      // Construir query para transações com joins
       let transactionsQuery = supabase
         .from("transactions")
         .select(`
-          *,
-          categories!inner (id, name, color, type),
-          accounts!inner (id, name)
+          id,
+          amount,
+          type,
+          description,
+          date,
+          user_id,
+          account_id,
+          category_id,
+          categories!inner (
+            id,
+            name,
+            color,
+            type
+          ),
+          accounts!inner (
+            id,
+            name
+          )
         `)
         .eq("user_id", user.id)
         .gte("date", filters.startDate)
         .lte("date", filters.endDate)
         .order("date", { ascending: false });
 
-      // Aplicar filtros adicionais se especificados
+      // Aplicar filtros adicionais
       if (filters.accountId) {
         transactionsQuery = transactionsQuery.eq("account_id", filters.accountId);
       }
@@ -174,13 +188,15 @@ export function Reports() {
       const { data: transactions, error: transactionsError } = await transactionsQuery;
 
       if (transactionsError) {
-        console.error("Error loading transactions:", transactionsError);
+        console.error("Erro ao carregar transações:", transactionsError);
         setLoading(false);
         return;
       }
 
-      if (!transactions) {
-        console.log("No transactions found");
+      console.log("Transações carregadas:", transactions?.length || 0);
+
+      if (!transactions || transactions.length === 0) {
+        console.log("Nenhuma transação encontrada no período");
         setReportData({
           totalIncome: 0,
           totalExpenses: 0,
@@ -194,33 +210,37 @@ export function Reports() {
         return;
       }
 
-      console.log("Loaded transactions:", transactions.length);
+      // Separar e validar transações
+      const validTransactions = transactions.map(t => ({
+        ...t,
+        amount: parseFloat(t.amount) || 0
+      }));
 
-      // Separar transações por tipo
-      const incomeTransactions = transactions.filter((t) => t.type === "income");
-      const expenseTransactions = transactions.filter((t) => t.type === "expense");
+      const incomeTransactions = validTransactions.filter(t => t.type === "income");
+      const expenseTransactions = validTransactions.filter(t => t.type === "expense");
 
-      console.log("Income transactions:", incomeTransactions.length);
-      console.log("Expense transactions:", expenseTransactions.length);
+      console.log("Receitas encontradas:", incomeTransactions.length);
+      console.log("Despesas encontradas:", expenseTransactions.length);
 
-      // Calcular totais com validação de números
-      const totalIncome = incomeTransactions.reduce((sum, t) => {
-        const amount = parseFloat(t.amount) || 0;
-        return sum + amount;
-      }, 0);
-
-      const totalExpenses = expenseTransactions.reduce((sum, t) => {
-        const amount = parseFloat(t.amount) || 0;
-        return sum + amount;
-      }, 0);
-
-      console.log("Total Income calculated:", totalIncome);
-      console.log("Total Expenses calculated:", totalExpenses);
-
+      // Calcular totais
+      const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
+      const totalExpenses = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
       const balance = totalIncome - totalExpenses;
 
+      console.log("Total de receitas calculado:", totalIncome);
+      console.log("Total de despesas calculado:", totalExpenses);
+      console.log("Saldo calculado:", balance);
+
+      // Debug das receitas
+      if (incomeTransactions.length > 0) {
+        console.log("Detalhes das receitas:");
+        incomeTransactions.forEach(t => {
+          console.log(`- ${t.description}: R$ ${t.amount} (${t.date}) - Categoria: ${t.categories?.name}`);
+        });
+      }
+
       // Agrupar por categoria
-      const categoryGroups = transactions.reduce((acc: any, transaction: any) => {
+      const categoryGroups = validTransactions.reduce((acc: any, transaction: any) => {
         const categoryName = transaction.categories?.name || "Sem categoria";
         const categoryColor = transaction.categories?.color || "#6B7280";
 
@@ -233,12 +253,10 @@ export function Reports() {
           };
         }
 
-        const amount = parseFloat(transaction.amount) || 0;
-
         if (transaction.type === "income") {
-          acc[categoryName].income += amount;
+          acc[categoryName].income += transaction.amount;
         } else {
-          acc[categoryName].expense += amount;
+          acc[categoryName].expense += transaction.amount;
         }
 
         return acc;
@@ -254,24 +272,23 @@ export function Reports() {
         const monthEnd = format(endOfMonth(month), "yyyy-MM-dd");
 
         // Filtrar transações do mês
-        const monthTransactions = transactions.filter((t) => {
-          const transactionDate = t.date;
-          return transactionDate >= monthStart && transactionDate <= monthEnd;
+        const monthTransactions = validTransactions.filter((t) => {
+          return t.date >= monthStart && t.date <= monthEnd;
         });
 
-        const income = monthTransactions
+        const monthIncome = monthTransactions
           .filter((t) => t.type === "income")
-          .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+          .reduce((sum, t) => sum + t.amount, 0);
 
-        const expense = monthTransactions
+        const monthExpense = monthTransactions
           .filter((t) => t.type === "expense")
-          .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+          .reduce((sum, t) => sum + t.amount, 0);
 
         monthlyTrend.push({
           month: format(month, "MMM", { locale: ptBR }),
-          income,
-          expense,
-          balance: income - expense,
+          income: monthIncome,
+          expense: monthExpense,
+          balance: monthIncome - monthExpense,
         });
       }
 
@@ -281,14 +298,13 @@ export function Reports() {
           const categoryName = transaction.categories?.name || "Sem categoria";
           const categoryColor = transaction.categories?.color || "#6B7280";
           const existing = acc.find((item) => item.name === categoryName);
-          const amount = parseFloat(transaction.amount) || 0;
 
           if (existing) {
-            existing.value += amount;
+            existing.value += transaction.amount;
           } else {
             acc.push({
               name: categoryName,
-              value: amount,
+              value: transaction.amount,
               color: categoryColor,
             });
           }
@@ -296,7 +312,7 @@ export function Reports() {
           return acc;
         }, [])
         .sort((a, b) => b.value - a.value)
-        .slice(0, 8); // Top 8 categorias
+        .slice(0, 8);
 
       // Top categorias de despesa
       const topExpenseCategories = expensesByCategory
@@ -308,6 +324,14 @@ export function Reports() {
           color: cat.color,
         }));
 
+      console.log("Dados finais do relatório:", {
+        totalIncome,
+        totalExpenses,
+        balance,
+        categoriesCount: transactionsByCategory.length,
+        monthlyTrendCount: monthlyTrend.length,
+      });
+
       setReportData({
         totalIncome,
         totalExpenses,
@@ -318,7 +342,7 @@ export function Reports() {
         topExpenseCategories,
       });
     } catch (error) {
-      console.error("Error loading report data:", error);
+      console.error("Erro ao carregar dados do relatório:", error);
     } finally {
       setLoading(false);
     }
@@ -354,7 +378,6 @@ export function Reports() {
   };
 
   const formatCurrency = (value: number | null | undefined) => {
-    // Garantir que o valor seja um número válido
     const numericValue = typeof value === "number" && !isNaN(value) ? value : 0;
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -401,7 +424,7 @@ export function Reports() {
         </button>
       </div>
 
-      {/* Filters */}
+      {/* Filtros */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
         <div className="flex items-center space-x-2 mb-4">
           <Filter className="w-5 h-5 text-gray-600" />
@@ -492,7 +515,7 @@ export function Reports() {
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Cards de Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <div className="flex items-center justify-between">
@@ -548,7 +571,7 @@ export function Reports() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        {/* Monthly Trend */}
+        {/* Tendência Mensal */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Tendência Mensal
@@ -586,7 +609,7 @@ export function Reports() {
           </div>
         </div>
 
-        {/* Expenses by Category */}
+        {/* Despesas por Categoria */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Despesas por Categoria
@@ -622,7 +645,7 @@ export function Reports() {
         </div>
       </div>
 
-      {/* Category Comparison */}
+      {/* Comparação por Categoria */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
           Receitas vs Despesas por Categoria
@@ -641,7 +664,7 @@ export function Reports() {
         </div>
       </div>
 
-      {/* Top Expense Categories */}
+      {/* Top Categorias de Despesa */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
           Principais Categorias de Despesa
