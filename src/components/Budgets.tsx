@@ -127,8 +127,9 @@ export function Budgets() {
           }
 
           const spent =
-            transactions?.reduce((sum, t) => sum + t.amount, 0) || 0;
-          const percentage = (spent / budget.amount) * 100;
+            transactions?.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
+          const budgetAmount = parseFloat(budget.amount) || 0;
+          const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
 
           let status: "safe" | "warning" | "danger" = "safe";
           if (percentage >= 100) status = "danger";
@@ -136,6 +137,7 @@ export function Budgets() {
 
           return {
             ...budget,
+            amount: budgetAmount,
             spent,
             percentage,
             status,

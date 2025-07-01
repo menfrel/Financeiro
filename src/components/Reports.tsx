@@ -16,6 +16,8 @@ import {
   endOfMonth,
   subMonths,
   parseISO,
+  startOfDay,
+  endOfDay,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -147,31 +149,29 @@ export function Reports() {
       console.log("Loading report data for user:", user.id);
       console.log("Date range:", filters.startDate, "to", filters.endDate);
 
-      // First, get all transactions for the user in the date range
+      // Construir query base para transações
       let transactionsQuery = supabase
         .from("transactions")
-        .select("*")
+        .select(`
+          *,
+          categories!inner (id, name, color, type),
+          accounts!inner (id, name)
+        `)
         .eq("user_id", user.id)
         .gte("date", filters.startDate)
         .lte("date", filters.endDate)
         .order("date", { ascending: false });
 
+      // Aplicar filtros adicionais se especificados
       if (filters.accountId) {
-        transactionsQuery = transactionsQuery.eq(
-          "account_id",
-          filters.accountId,
-        );
+        transactionsQuery = transactionsQuery.eq("account_id", filters.accountId);
       }
 
       if (filters.categoryId) {
-        transactionsQuery = transactionsQuery.eq(
-          "category_id",
-          filters.categoryId,
-        );
+        transactionsQuery = transactionsQuery.eq("category_id", filters.categoryId);
       }
 
-      const { data: transactions, error: transactionsError } =
-        await transactionsQuery;
+      const { data: transactions, error: transactionsError } = await transactionsQuery;
 
       if (transactionsError) {
         console.error("Error loading transactions:", transactionsError);
@@ -195,178 +195,77 @@ export function Reports() {
       }
 
       console.log("Loaded transactions:", transactions.length);
-      console.log(
-        "Income transactions:",
-        transactions.filter((t) => t.type === "income").length,
-      );
-      console.log(
-        "Expense transactions:",
-        transactions.filter((t) => t.type === "expense").length,
-      );
 
-      // Get categories for the transactions
-      const categoryIds = [
-        ...new Set(transactions.map((t) => t.category_id).filter(Boolean)),
-      ];
-      let categoriesData: any[] = [];
+      // Separar transações por tipo
+      const incomeTransactions = transactions.filter((t) => t.type === "income");
+      const expenseTransactions = transactions.filter((t) => t.type === "expense");
 
-      if (categoryIds.length > 0) {
-        const { data: categories, error: categoriesError } = await supabase
-          .from("categories")
-          .select("*")
-          .in("id", categoryIds)
-          .eq("user_id", user.id);
+      console.log("Income transactions:", incomeTransactions.length);
+      console.log("Expense transactions:", expenseTransactions.length);
 
-        if (!categoriesError && categories) {
-          categoriesData = categories;
-        }
-      }
-
-      // Get accounts for the transactions
-      const accountIds = [
-        ...new Set(transactions.map((t) => t.account_id).filter(Boolean)),
-      ];
-      let accountsData: any[] = [];
-
-      if (accountIds.length > 0) {
-        const { data: accounts, error: accountsError } = await supabase
-          .from("accounts")
-          .select("*")
-          .in("id", accountIds)
-          .eq("user_id", user.id);
-
-        if (!accountsError && accounts) {
-          accountsData = accounts;
-        }
-      }
-
-      // Enrich transactions with category and account data
-      const enrichedTransactions = transactions.map((transaction) => {
-        const category = categoriesData.find(
-          (c) => c.id === transaction.category_id,
-        );
-        const account = accountsData.find(
-          (a) => a.id === transaction.account_id,
-        );
-
-        return {
-          ...transaction,
-          categories: category || null,
-          accounts: account || null,
-        };
-      });
-
-      console.log("Enriched transactions:", enrichedTransactions.length);
-
-      // Calculate totals
-      const incomeTransactions = enrichedTransactions.filter(
-        (t) => t.type === "income",
-      );
-      const expenseTransactions = enrichedTransactions.filter(
-        (t) => t.type === "expense",
-      );
-
+      // Calcular totais com validação de números
       const totalIncome = incomeTransactions.reduce((sum, t) => {
-        const amount =
-          typeof t.amount === "number" && !isNaN(t.amount) ? t.amount : 0;
+        const amount = parseFloat(t.amount) || 0;
         return sum + amount;
       }, 0);
 
       const totalExpenses = expenseTransactions.reduce((sum, t) => {
-        const amount =
-          typeof t.amount === "number" && !isNaN(t.amount) ? t.amount : 0;
+        const amount = parseFloat(t.amount) || 0;
         return sum + amount;
       }, 0);
 
-      console.log("Total Income:", totalIncome);
-      console.log("Total Expenses:", totalExpenses);
-      console.log(
-        "Income transactions details:",
-        incomeTransactions.map((t) => ({
-          amount: t.amount,
-          date: t.date,
-          type: t.type,
-          category: t.categories?.name,
-        })),
-      );
-      console.log(
-        "Expense transactions details:",
-        expenseTransactions.slice(0, 5).map((t) => ({
-          amount: t.amount,
-          date: t.date,
-          type: t.type,
-          category: t.categories?.name,
-        })),
-      );
+      console.log("Total Income calculated:", totalIncome);
+      console.log("Total Expenses calculated:", totalExpenses);
 
       const balance = totalIncome - totalExpenses;
 
-      // Group by category
-      const categoryGroups = enrichedTransactions.reduce(
-        (acc: any, transaction: any) => {
-          const categoryName = transaction.categories?.name || "Sem categoria";
-          const categoryColor = transaction.categories?.color || "#6B7280";
+      // Agrupar por categoria
+      const categoryGroups = transactions.reduce((acc: any, transaction: any) => {
+        const categoryName = transaction.categories?.name || "Sem categoria";
+        const categoryColor = transaction.categories?.color || "#6B7280";
 
-          if (!acc[categoryName]) {
-            acc[categoryName] = {
-              name: categoryName,
-              income: 0,
-              expense: 0,
-              color: categoryColor,
-            };
-          }
+        if (!acc[categoryName]) {
+          acc[categoryName] = {
+            name: categoryName,
+            income: 0,
+            expense: 0,
+            color: categoryColor,
+          };
+        }
 
-          const amount =
-            typeof transaction.amount === "number" && !isNaN(transaction.amount)
-              ? transaction.amount
-              : 0;
+        const amount = parseFloat(transaction.amount) || 0;
 
-          if (transaction.type === "income") {
-            acc[categoryName].income += amount;
-          } else {
-            acc[categoryName].expense += amount;
-          }
+        if (transaction.type === "income") {
+          acc[categoryName].income += amount;
+        } else {
+          acc[categoryName].expense += amount;
+        }
 
-          return acc;
-        },
-        {},
-      );
+        return acc;
+      }, {});
 
       const transactionsByCategory = Object.values(categoryGroups);
 
-      // Monthly trend (last 6 months)
+      // Tendência mensal (últimos 6 meses)
       const monthlyTrend = [];
       for (let i = 5; i >= 0; i--) {
         const month = subMonths(new Date(), i);
-        const monthStart = startOfMonth(month);
-        const monthEnd = endOfMonth(month);
+        const monthStart = format(startOfMonth(month), "yyyy-MM-dd");
+        const monthEnd = format(endOfMonth(month), "yyyy-MM-dd");
 
-        const monthTransactions = enrichedTransactions.filter((t) => {
-          try {
-            // Handle both ISO string and date string formats
-            const transactionDate = new Date(t.date);
-            return transactionDate >= monthStart && transactionDate <= monthEnd;
-          } catch (error) {
-            console.warn("Invalid date format:", t.date);
-            return false;
-          }
+        // Filtrar transações do mês
+        const monthTransactions = transactions.filter((t) => {
+          const transactionDate = t.date;
+          return transactionDate >= monthStart && transactionDate <= monthEnd;
         });
 
         const income = monthTransactions
           .filter((t) => t.type === "income")
-          .reduce((sum, t) => {
-            const amount =
-              typeof t.amount === "number" && !isNaN(t.amount) ? t.amount : 0;
-            return sum + amount;
-          }, 0);
+          .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
         const expense = monthTransactions
           .filter((t) => t.type === "expense")
-          .reduce((sum, t) => {
-            const amount =
-              typeof t.amount === "number" && !isNaN(t.amount) ? t.amount : 0;
-            return sum + amount;
-          }, 0);
+          .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
         monthlyTrend.push({
           month: format(month, "MMM", { locale: ptBR }),
@@ -376,17 +275,13 @@ export function Reports() {
         });
       }
 
-      // Expenses by category for pie chart
-      const expensesByCategory = enrichedTransactions
-        .filter((t) => t.type === "expense")
+      // Despesas por categoria para gráfico de pizza
+      const expensesByCategory = expenseTransactions
         .reduce((acc: any[], transaction: any) => {
           const categoryName = transaction.categories?.name || "Sem categoria";
           const categoryColor = transaction.categories?.color || "#6B7280";
           const existing = acc.find((item) => item.name === categoryName);
-          const amount =
-            typeof transaction.amount === "number" && !isNaN(transaction.amount)
-              ? transaction.amount
-              : 0;
+          const amount = parseFloat(transaction.amount) || 0;
 
           if (existing) {
             existing.value += amount;
@@ -401,15 +296,15 @@ export function Reports() {
           return acc;
         }, [])
         .sort((a, b) => b.value - a.value)
-        .slice(0, 8); // Top 8 categories
+        .slice(0, 8); // Top 8 categorias
 
-      // Top expense categories
+      // Top categorias de despesa
       const topExpenseCategories = expensesByCategory
         .slice(0, 5)
         .map((cat) => ({
           name: cat.name,
           amount: cat.value,
-          percentage: (cat.value / totalExpenses) * 100,
+          percentage: totalExpenses > 0 ? (cat.value / totalExpenses) * 100 : 0,
           color: cat.color,
         }));
 

@@ -91,14 +91,10 @@ export function Transactions() {
           .select("amount, type")
           .eq("account_id", accountId);
 
-        const initialBalance =
-          typeof account.initial_balance === "number"
-            ? account.initial_balance
-            : 0;
+        const initialBalance = parseFloat(account.initial_balance) || 0;
         const transactionBalance = (transactions || []).reduce(
           (sum, transaction) => {
-            const amount =
-              typeof transaction.amount === "number" ? transaction.amount : 0;
+            const amount = parseFloat(transaction.amount) || 0;
             return sum + (transaction.type === "income" ? amount : -amount);
           },
           0,
@@ -163,22 +159,15 @@ export function Transactions() {
       const validatedTransactions = (transactionsData || []).map(
         (transaction) => ({
           ...transaction,
-          amount:
-            typeof transaction.amount === "number" ? transaction.amount : 0,
+          amount: parseFloat(transaction.amount) || 0,
         }),
       );
 
       // Validar dados das contas
       const validatedAccounts = (accountsData || []).map((account) => ({
         ...account,
-        initial_balance:
-          typeof account.initial_balance === "number"
-            ? account.initial_balance
-            : 0,
-        current_balance:
-          typeof account.current_balance === "number"
-            ? account.current_balance
-            : account.initial_balance || 0,
+        initial_balance: parseFloat(account.initial_balance) || 0,
+        current_balance: parseFloat(account.current_balance) || parseFloat(account.initial_balance) || 0,
       }));
 
       setTransactions(validatedTransactions);
@@ -254,7 +243,7 @@ export function Transactions() {
     setValue("amount", transaction.amount);
     setValue("type", transaction.type);
     setValue("description", transaction.description);
-    setValue("date", transaction.date.split("T")[0]);
+    setValue("date", transaction.date);
     setValue("account_id", transaction.account?.id || "");
     setValue("category_id", transaction.category?.id || "");
     setValue("is_recurring", transaction.is_recurring);
@@ -262,7 +251,7 @@ export function Transactions() {
       setValue("recurring_frequency", transaction.recurring_frequency);
     }
     if (transaction.recurring_until) {
-      setValue("recurring_until", transaction.recurring_until.split("T")[0]);
+      setValue("recurring_until", transaction.recurring_until);
     }
     setIsModalOpen(true);
   };
@@ -298,7 +287,7 @@ export function Transactions() {
   const openModal = () => {
     setEditingTransaction(null);
     reset();
-    setValue("date", new Date().toISOString().split("T")[0]);
+    setValue("date", format(new Date(), "yyyy-MM-dd"));
     setIsModalOpen(true);
   };
 
@@ -496,7 +485,7 @@ export function Transactions() {
                       <span>{transaction.account?.name || "Sem conta"}</span>
                       <span>•</span>
                       <span>
-                        {format(parseISO(transaction.date), "dd/MM/yyyy")}
+                        {format(new Date(transaction.date), "dd/MM/yyyy")}
                       </span>
                     </div>
                   </div>

@@ -102,14 +102,10 @@ export function Dashboard() {
           .eq("user_id", user!.id)
           .eq("account_id", account.id);
 
-        const initialBalance =
-          typeof account.initial_balance === "number"
-            ? account.initial_balance
-            : 0;
+        const initialBalance = parseFloat(account.initial_balance) || 0;
         const transactionBalance = (transactions || []).reduce(
           (sum, transaction) => {
-            const amount =
-              typeof transaction.amount === "number" ? transaction.amount : 0;
+            const amount = parseFloat(transaction.amount) || 0;
             return sum + (transaction.type === "income" ? amount : -amount);
           },
           0,
@@ -118,9 +114,7 @@ export function Dashboard() {
         const calculatedBalance = initialBalance + transactionBalance;
 
         // Atualizar apenas se o saldo calculado for diferente do atual
-        if (
-          Math.abs(calculatedBalance - (account.current_balance || 0)) > 0.01
-        ) {
+        if (Math.abs(calculatedBalance - (parseFloat(account.current_balance) || 0)) > 0.01) {
           await supabase
             .from("accounts")
             .update({
@@ -150,8 +144,8 @@ export function Dashboard() {
 
       // Get current month transactions
       const currentMonth = new Date();
-      const startDate = startOfMonth(currentMonth);
-      const endDate = endOfMonth(currentMonth);
+      const startDate = format(startOfMonth(currentMonth), "yyyy-MM-dd");
+      const endDate = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
       const { data: transactions } = await supabase
         .from("transactions")
@@ -163,31 +157,31 @@ export function Dashboard() {
         `,
         )
         .eq("user_id", user!.id)
-        .gte("date", startDate.toISOString())
-        .lte("date", endDate.toISOString());
+        .gte("date", startDate)
+        .lte("date", endDate);
 
       // Get last 6 months data
       const monthlyData = [];
       for (let i = 5; i >= 0; i--) {
         const month = subMonths(currentMonth, i);
-        const monthStart = startOfMonth(month);
-        const monthEnd = endOfMonth(month);
+        const monthStart = format(startOfMonth(month), "yyyy-MM-dd");
+        const monthEnd = format(endOfMonth(month), "yyyy-MM-dd");
 
         const { data: monthTransactions } = await supabase
           .from("transactions")
           .select("amount, type")
           .eq("user_id", user!.id)
-          .gte("date", monthStart.toISOString())
-          .lte("date", monthEnd.toISOString());
+          .gte("date", monthStart)
+          .lte("date", monthEnd);
 
         const income =
           monthTransactions
             ?.filter((t) => t.type === "income")
-            .reduce((sum, t) => sum + t.amount, 0) || 0;
+            .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
         const expense =
           monthTransactions
             ?.filter((t) => t.type === "expense")
-            .reduce((sum, t) => sum + t.amount, 0) || 0;
+            .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
 
         monthlyData.push({
           month: format(month, "MMM", { locale: ptBR }),
@@ -199,16 +193,15 @@ export function Dashboard() {
 
       // Calculate totals
       const totalBalance =
-        accounts?.reduce((sum, account) => sum + account.current_balance, 0) ||
-        0;
+        accounts?.reduce((sum, account) => sum + (parseFloat(account.current_balance) || 0), 0) || 0;
       const monthlyIncome =
         transactions
           ?.filter((t) => t.type === "income")
-          .reduce((sum, t) => sum + t.amount, 0) || 0;
+          .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
       const monthlyExpenses =
         transactions
           ?.filter((t) => t.type === "expense")
-          .reduce((sum, t) => sum + t.amount, 0) || 0;
+          .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
 
       // Group expenses by category
       const expensesByCategory =
@@ -218,13 +211,14 @@ export function Dashboard() {
             const categoryName =
               transaction.categories?.name || "Sem categoria";
             const existing = acc.find((item) => item.name === categoryName);
+            const amount = parseFloat(transaction.amount) || 0;
 
             if (existing) {
-              existing.value += transaction.amount;
+              existing.value += amount;
             } else {
               acc.push({
                 name: categoryName,
-                value: transaction.amount,
+                value: amount,
                 color:
                   transaction.categories?.color ||
                   COLORS[acc.length % COLORS.length],
@@ -253,10 +247,7 @@ export function Dashboard() {
         monthlyExpenses,
         accounts: (accounts || []).map((account) => ({
           name: account.name,
-          balance:
-            typeof account.current_balance === "number"
-              ? account.current_balance
-              : 0,
+          balance: parseFloat(account.current_balance) || 0,
           type: account.type,
         })),
         expensesByCategory,
@@ -264,7 +255,7 @@ export function Dashboard() {
         recentTransactions: (recentTransactions || []).map((t) => ({
           id: t.id,
           description: t.description,
-          amount: t.amount,
+          amount: parseFloat(t.amount) || 0,
           type: t.type,
           date: t.date,
           category: t.categories?.name || "Sem categoria",
