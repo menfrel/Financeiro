@@ -16,8 +16,6 @@ import {
   endOfMonth,
   subMonths,
   parseISO,
-  startOfDay,
-  endOfDay,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -144,11 +142,53 @@ export function Reports() {
         return;
       }
 
-      console.log("=== RELATÓRIOS DEBUG ===");
+      console.log("=== RELATÓRIOS DEBUG DETALHADO ===");
       console.log("User ID:", user.id);
       console.log("Filtros aplicados:", filters);
+      console.log("Data inicial:", filters.startDate);
+      console.log("Data final:", filters.endDate);
 
-      // Construir query para transações com joins
+      // Primeiro, vamos buscar TODAS as transações do usuário para debug
+      const { data: allTransactions, error: allError } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false });
+
+      if (allError) {
+        console.error("Erro ao buscar todas as transações:", allError);
+      } else {
+        console.log("Total de transações do usuário:", allTransactions?.length || 0);
+        
+        // Debug das receitas
+        const allIncomes = allTransactions?.filter(t => t.type === "income") || [];
+        console.log("Total de receitas no banco:", allIncomes.length);
+        
+        if (allIncomes.length > 0) {
+          console.log("Receitas encontradas no banco:");
+          allIncomes.forEach(income => {
+            console.log(`- ID: ${income.id}, Valor: ${income.amount}, Data: ${income.date}, Tipo: ${income.type}`);
+          });
+        }
+
+        // Debug das transações no período
+        const transactionsInPeriod = allTransactions?.filter(t => 
+          t.date >= filters.startDate && t.date <= filters.endDate
+        ) || [];
+        console.log("Transações no período filtrado:", transactionsInPeriod.length);
+        
+        const incomesInPeriod = transactionsInPeriod.filter(t => t.type === "income");
+        console.log("Receitas no período:", incomesInPeriod.length);
+        
+        if (incomesInPeriod.length > 0) {
+          console.log("Receitas no período:");
+          incomesInPeriod.forEach(income => {
+            console.log(`- Valor: ${income.amount}, Data: ${income.date}`);
+          });
+        }
+      }
+
+      // Agora vamos fazer a consulta com joins para os relatórios
       let transactionsQuery = supabase
         .from("transactions")
         .select(`
@@ -160,13 +200,13 @@ export function Reports() {
           user_id,
           account_id,
           category_id,
-          categories!inner (
+          categories (
             id,
             name,
             color,
             type
           ),
-          accounts!inner (
+          accounts (
             id,
             name
           )
@@ -188,15 +228,15 @@ export function Reports() {
       const { data: transactions, error: transactionsError } = await transactionsQuery;
 
       if (transactionsError) {
-        console.error("Erro ao carregar transações:", transactionsError);
+        console.error("Erro ao carregar transações com joins:", transactionsError);
         setLoading(false);
         return;
       }
 
-      console.log("Transações carregadas:", transactions?.length || 0);
+      console.log("Transações carregadas com joins:", transactions?.length || 0);
 
       if (!transactions || transactions.length === 0) {
-        console.log("Nenhuma transação encontrada no período");
+        console.log("Nenhuma transação encontrada no período com joins");
         setReportData({
           totalIncome: 0,
           totalExpenses: 0,
@@ -210,34 +250,72 @@ export function Reports() {
         return;
       }
 
-      // Separar e validar transações
-      const validTransactions = transactions.map(t => ({
-        ...t,
-        amount: parseFloat(t.amount) || 0
-      }));
+      // Validar e processar transações
+      const validTransactions = transactions.map(t => {
+        const amount = parseFloat(String(t.amount)) || 0;
+        return {
+          ...t,
+          amount: amount
+        };
+      });
 
+      console.log("Transações validadas:", validTransactions.length);
+
+      // Separar por tipo
       const incomeTransactions = validTransactions.filter(t => t.type === "income");
       const expenseTransactions = validTransactions.filter(t => t.type === "expense");
 
-      console.log("Receitas encontradas:", incomeTransactions.length);
-      console.log("Despesas encontradas:", expenseTransactions.length);
+      console.log("Receitas após join:", incomeTransactions.length);
+      console.log("Despesas após join:", expenseTransactions.length);
+
+      // Debug detalhado das receitas
+      if (incomeTransactions.length > 0) {
+        console.log("Detalhes das receitas após join:");
+        incomeTransactions.forEach(t => {
+          console.log(`- ${t.description}: R$ ${t.amount} (${t.date}) - Categoria: ${t.categories?.name || 'N/A'}`);
+        });
+      } else {
+        console.log("PROBLEMA: Nenhuma receita encontrada após o join!");
+        
+        // Vamos verificar se o problema está no join
+        const { data: simpleIncomes } = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("type", "income")
+          .gte("date", filters.startDate)
+          .lte("date", filters.endDate);
+          
+        console.log("Receitas sem join:", simpleIncomes?.length || 0);
+        
+        if (simpleIncomes && simpleIncomes.length > 0) {
+          console.log("Receitas encontradas sem join - problema está no join!");
+          simpleIncomes.forEach(income => {
+            console.log(`- Receita sem join: ${income.description}, Valor: ${income.amount}, Category ID: ${income.category_id}`);
+          });
+          
+          // Verificar se as categorias existem
+          for (const income of simpleIncomes) {
+            const { data: category } = await supabase
+              .from("categories")
+              .select("*")
+              .eq("id", income.category_id)
+              .single();
+              
+            console.log(`Categoria para receita ${income.id}:`, category);
+          }
+        }
+      }
 
       // Calcular totais
       const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
       const totalExpenses = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
       const balance = totalIncome - totalExpenses;
 
-      console.log("Total de receitas calculado:", totalIncome);
-      console.log("Total de despesas calculado:", totalExpenses);
-      console.log("Saldo calculado:", balance);
-
-      // Debug das receitas
-      if (incomeTransactions.length > 0) {
-        console.log("Detalhes das receitas:");
-        incomeTransactions.forEach(t => {
-          console.log(`- ${t.description}: R$ ${t.amount} (${t.date}) - Categoria: ${t.categories?.name}`);
-        });
-      }
+      console.log("=== TOTAIS CALCULADOS ===");
+      console.log("Total de receitas:", totalIncome);
+      console.log("Total de despesas:", totalExpenses);
+      console.log("Saldo:", balance);
 
       // Agrupar por categoria
       const categoryGroups = validTransactions.reduce((acc: any, transaction: any) => {
@@ -324,7 +402,8 @@ export function Reports() {
           color: cat.color,
         }));
 
-      console.log("Dados finais do relatório:", {
+      console.log("=== DADOS FINAIS ===");
+      console.log("Dados do relatório:", {
         totalIncome,
         totalExpenses,
         balance,
