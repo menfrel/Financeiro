@@ -124,30 +124,40 @@ export function Transactions() {
     try {
       setLoading(true);
 
-      // Load transactions
+      // Verificar se o usuário está autenticado
+      if (!user?.id) {
+        console.error("Usuário não autenticado");
+        setLoading(false);
+        return;
+      }
+
+      // Load transactions - garantir isolamento por usuário
       const { data: transactionsData } = await supabase
         .from("transactions")
         .select(
           `
           *,
-          accounts (id, name),
-          categories (id, name, color)
+          accounts!inner (id, name),
+          categories!inner (id, name, color)
         `,
         )
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .order("date", { ascending: false });
 
-      // Load accounts
+      // Load accounts - garantir isolamento por usuário
       const { data: accountsData } = await supabase
         .from("accounts")
         .select("*")
-        .eq("user_id", user!.id);
+        .eq("user_id", user.id)
+        .order("name", { ascending: true });
 
-      // Load categories
+      // Load categories - garantir isolamento por usuário
       const { data: categoriesData } = await supabase
         .from("categories")
         .select("*")
-        .eq("user_id", user!.id);
+        .eq("user_id", user.id)
+        .order("type", { ascending: true })
+        .order("name", { ascending: true });
 
       // Validar dados das transações
       const validatedTransactions = (transactionsData || []).map(
@@ -185,8 +195,14 @@ export function Transactions() {
     try {
       setSubmitting(true);
 
+      // Verificar se o usuário está autenticado
+      if (!user?.id) {
+        console.error("Usuário não autenticado");
+        return;
+      }
+
       const transactionData = {
-        user_id: user!.id,
+        user_id: user.id,
         amount: data.amount,
         type: data.type,
         description: data.description,
@@ -201,10 +217,12 @@ export function Transactions() {
       };
 
       if (editingTransaction) {
+        // Garantir que só pode editar transações do próprio usuário
         const { error } = await supabase
           .from("transactions")
           .update(transactionData)
-          .eq("id", editingTransaction.id);
+          .eq("id", editingTransaction.id)
+          .eq("user_id", user.id);
 
         if (error) throw error;
       } else {
@@ -257,10 +275,12 @@ export function Transactions() {
       const transaction = transactions.find((t) => t.id === transactionId);
       const accountId = transaction?.account?.id;
 
+      // Garantir que só pode deletar transações do próprio usuário
       const { error } = await supabase
         .from("transactions")
         .delete()
-        .eq("id", transactionId);
+        .eq("id", transactionId)
+        .eq("user_id", user!.id);
 
       if (error) throw error;
 

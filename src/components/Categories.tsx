@@ -1,147 +1,201 @@
-import React, { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
-import { useAuth } from '../hooks/useAuth'
-import { Plus, Tag, Edit2, Trash2, TrendingUp, TrendingDown } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import React, { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../hooks/useAuth";
+import {
+  Plus,
+  Tag,
+  Edit2,
+  Trash2,
+  TrendingUp,
+  TrendingDown,
+} from "lucide-react";
+import { useForm } from "react-hook-form";
 
 interface Category {
-  id: string
-  name: string
-  type: 'income' | 'expense'
-  color: string
-  parent_id: string | null
-  created_at: string
+  id: string;
+  name: string;
+  type: "income" | "expense";
+  color: string;
+  parent_id: string | null;
+  created_at: string;
 }
 
 interface CategoryForm {
-  name: string
-  type: 'income' | 'expense'
-  color: string
-  parent_id?: string
+  name: string;
+  type: "income" | "expense";
+  color: string;
+  parent_id?: string;
 }
 
 const colors = [
-  '#EF4444', '#F97316', '#F59E0B', '#EAB308', '#84CC16', '#22C55E',
-  '#10B981', '#14B8A6', '#06B6D4', '#0EA5E9', '#3B82F6', '#6366F1',
-  '#8B5CF6', '#A855F7', '#D946EF', '#EC4899', '#F43F5E'
-]
+  "#EF4444",
+  "#F97316",
+  "#F59E0B",
+  "#EAB308",
+  "#84CC16",
+  "#22C55E",
+  "#10B981",
+  "#14B8A6",
+  "#06B6D4",
+  "#0EA5E9",
+  "#3B82F6",
+  "#6366F1",
+  "#8B5CF6",
+  "#A855F7",
+  "#D946EF",
+  "#EC4899",
+  "#F43F5E",
+];
 
 export function Categories() {
-  const { user } = useAuth()
-  const [categories, setCategories] = useState<Category[]>([])
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
+  const { user } = useAuth();
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<CategoryForm>()
-  const watchType = watch('type')
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<CategoryForm>();
+  const watchType = watch("type");
 
   useEffect(() => {
     if (user) {
-      loadCategories()
+      loadCategories();
     }
-  }, [user])
+  }, [user]);
 
   const loadCategories = async () => {
     try {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false })
+      setLoading(true);
 
-      if (error) throw error
-      setCategories(data || [])
+      // Verificar se o usuário está autenticado
+      if (!user?.id) {
+        console.error("Usuário não autenticado");
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("categories")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("type", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (error) {
+        console.error("Error loading categories:", error);
+        throw error;
+      }
+
+      setCategories(data || []);
     } catch (error) {
-      console.error('Error loading categories:', error)
+      console.error("Error loading categories:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const onSubmit = async (data: CategoryForm) => {
     try {
-      setSubmitting(true)
-      
+      setSubmitting(true);
+
+      // Verificar se o usuário está autenticado
+      if (!user?.id) {
+        console.error("Usuário não autenticado");
+        return;
+      }
+
       const categoryData = {
-        user_id: user!.id,
+        user_id: user.id,
         name: data.name,
         type: data.type,
         color: data.color,
-        parent_id: data.parent_id || null
-      }
+        parent_id: data.parent_id || null,
+      };
 
       if (editingCategory) {
+        // Garantir que só pode editar categorias do próprio usuário
         const { error } = await supabase
-          .from('categories')
+          .from("categories")
           .update(categoryData)
-          .eq('id', editingCategory.id)
+          .eq("id", editingCategory.id)
+          .eq("user_id", user.id);
 
-        if (error) throw error
+        if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('categories')
-          .insert(categoryData)
+          .from("categories")
+          .insert(categoryData);
 
-        if (error) throw error
+        if (error) throw error;
       }
 
-      await loadCategories()
-      setIsModalOpen(false)
-      setEditingCategory(null)
-      reset()
+      await loadCategories();
+      setIsModalOpen(false);
+      setEditingCategory(null);
+      reset();
     } catch (error) {
-      console.error('Error saving category:', error)
+      console.error("Error saving category:", error);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   const handleEdit = (category: Category) => {
-    setEditingCategory(category)
-    setValue('name', category.name)
-    setValue('type', category.type)
-    setValue('color', category.color)
-    setValue('parent_id', category.parent_id || '')
-    setIsModalOpen(true)
-  }
+    setEditingCategory(category);
+    setValue("name", category.name);
+    setValue("type", category.type);
+    setValue("color", category.color);
+    setValue("parent_id", category.parent_id || "");
+    setIsModalOpen(true);
+  };
 
   const handleDelete = async (categoryId: string) => {
-    if (!confirm('Deseja realmente excluir esta categoria?')) return
+    if (!confirm("Deseja realmente excluir esta categoria?")) return;
 
     try {
+      // Garantir que só pode deletar categorias do próprio usuário
       const { error } = await supabase
-        .from('categories')
+        .from("categories")
         .delete()
-        .eq('id', categoryId)
+        .eq("id", categoryId)
+        .eq("user_id", user!.id);
 
-      if (error) throw error
-      await loadCategories()
+      if (error) throw error;
+      await loadCategories();
     } catch (error) {
-      console.error('Error deleting category:', error)
+      console.error("Error deleting category:", error);
     }
-  }
+  };
 
   const openModal = () => {
-    setEditingCategory(null)
-    reset()
-    setValue('color', colors[0])
-    setIsModalOpen(true)
-  }
+    setEditingCategory(null);
+    reset();
+    setValue("color", colors[0]);
+    setIsModalOpen(true);
+  };
 
-  const groupedCategories = categories.reduce((acc, category) => {
-    if (!acc[category.type]) {
-      acc[category.type] = []
-    }
-    acc[category.type].push(category)
-    return acc
-  }, {} as Record<string, Category[]>)
+  const groupedCategories = categories.reduce(
+    (acc, category) => {
+      if (!acc[category.type]) {
+        acc[category.type] = [];
+      }
+      acc[category.type].push(category);
+      return acc;
+    },
+    {} as Record<string, Category[]>,
+  );
 
-  const parentCategories = categories.filter(cat => 
-    cat.parent_id === null && (!watchType || cat.type === watchType)
-  )
+  const parentCategories = categories.filter(
+    (cat) => cat.parent_id === null && (!watchType || cat.type === watchType),
+  );
 
   if (loading) {
     return (
@@ -153,7 +207,10 @@ export function Categories() {
               <div key={i} className="space-y-4">
                 <div className="h-6 bg-gray-200 rounded w-1/3"></div>
                 {[...Array(3)].map((_, j) => (
-                  <div key={j} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                  <div
+                    key={j}
+                    className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"
+                  >
                     <div className="h-4 bg-gray-200 rounded w-1/2"></div>
                   </div>
                 ))}
@@ -162,7 +219,7 @@ export function Categories() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -170,7 +227,9 @@ export function Categories() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Categorias</h1>
-          <p className="text-gray-600 mt-2">Organize suas receitas e despesas</p>
+          <p className="text-gray-600 mt-2">
+            Organize suas receitas e despesas
+          </p>
         </div>
         <button
           onClick={openModal}
@@ -184,8 +243,12 @@ export function Categories() {
       {categories.length === 0 ? (
         <div className="text-center py-12">
           <Tag className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma categoria encontrada</h3>
-          <p className="text-gray-600 mb-6">Crie suas primeiras categorias para organizar seus lançamentos</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            Nenhuma categoria encontrada
+          </h3>
+          <p className="text-gray-600 mb-6">
+            Crie suas primeiras categorias para organizar seus lançamentos
+          </p>
           <button
             onClick={openModal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
@@ -204,17 +267,22 @@ export function Categories() {
                 {groupedCategories.income?.length || 0}
               </span>
             </div>
-            
+
             <div className="space-y-3">
               {groupedCategories.income?.map((category) => (
-                <div key={category.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                <div
+                  key={category.id}
+                  className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <div 
+                      <div
                         className="w-4 h-4 rounded-full"
                         style={{ backgroundColor: category.color }}
                       />
-                      <span className="font-medium text-gray-900">{category.name}</span>
+                      <span className="font-medium text-gray-900">
+                        {category.name}
+                      </span>
                     </div>
                     <div className="flex space-x-1">
                       <button
@@ -233,8 +301,9 @@ export function Categories() {
                   </div>
                 </div>
               ))}
-              
-              {(!groupedCategories.income || groupedCategories.income.length === 0) && (
+
+              {(!groupedCategories.income ||
+                groupedCategories.income.length === 0) && (
                 <div className="text-center text-gray-500 py-8">
                   Nenhuma categoria de receita encontrada
                 </div>
@@ -251,17 +320,22 @@ export function Categories() {
                 {groupedCategories.expense?.length || 0}
               </span>
             </div>
-            
+
             <div className="space-y-3">
               {groupedCategories.expense?.map((category) => (
-                <div key={category.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                <div
+                  key={category.id}
+                  className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <div 
+                      <div
                         className="w-4 h-4 rounded-full"
                         style={{ backgroundColor: category.color }}
                       />
-                      <span className="font-medium text-gray-900">{category.name}</span>
+                      <span className="font-medium text-gray-900">
+                        {category.name}
+                      </span>
                     </div>
                     <div className="flex space-x-1">
                       <button
@@ -280,8 +354,9 @@ export function Categories() {
                   </div>
                 </div>
               ))}
-              
-              {(!groupedCategories.expense || groupedCategories.expense.length === 0) && (
+
+              {(!groupedCategories.expense ||
+                groupedCategories.expense.length === 0) && (
                 <div className="text-center text-gray-500 py-8">
                   Nenhuma categoria de despesa encontrada
                 </div>
@@ -296,7 +371,7 @@ export function Categories() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">
-              {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
+              {editingCategory ? "Editar Categoria" : "Nova Categoria"}
             </h2>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -305,12 +380,14 @@ export function Categories() {
                   Nome da Categoria
                 </label>
                 <input
-                  {...register('name', { required: 'Nome é obrigatório' })}
+                  {...register("name", { required: "Nome é obrigatório" })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Ex: Alimentação, Salário, etc."
                 />
                 {errors.name && (
-                  <p className="text-red-600 text-sm mt-1">{errors.name.message}</p>
+                  <p className="text-red-600 text-sm mt-1">
+                    {errors.name.message}
+                  </p>
                 )}
               </div>
 
@@ -319,7 +396,7 @@ export function Categories() {
                   Tipo
                 </label>
                 <select
-                  {...register('type', { required: 'Tipo é obrigatório' })}
+                  {...register("type", { required: "Tipo é obrigatório" })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Selecione o tipo</option>
@@ -327,7 +404,9 @@ export function Categories() {
                   <option value="expense">Despesa</option>
                 </select>
                 {errors.type && (
-                  <p className="text-red-600 text-sm mt-1">{errors.type.message}</p>
+                  <p className="text-red-600 text-sm mt-1">
+                    {errors.type.message}
+                  </p>
                 )}
               </div>
 
@@ -336,7 +415,7 @@ export function Categories() {
                   Categoria Pai (Opcional)
                 </label>
                 <select
-                  {...register('parent_id')}
+                  {...register("parent_id")}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Nenhuma (categoria principal)</option>
@@ -356,7 +435,9 @@ export function Categories() {
                   {colors.map((color) => (
                     <label key={color} className="cursor-pointer">
                       <input
-                        {...register('color', { required: 'Cor é obrigatória' })}
+                        {...register("color", {
+                          required: "Cor é obrigatória",
+                        })}
                         type="radio"
                         value={color}
                         className="sr-only"
@@ -369,7 +450,9 @@ export function Categories() {
                   ))}
                 </div>
                 {errors.color && (
-                  <p className="text-red-600 text-sm mt-1">{errors.color.message}</p>
+                  <p className="text-red-600 text-sm mt-1">
+                    {errors.color.message}
+                  </p>
                 )}
               </div>
 
@@ -386,7 +469,11 @@ export function Categories() {
                   disabled={submitting}
                   className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {submitting ? 'Salvando...' : (editingCategory ? 'Atualizar' : 'Criar')}
+                  {submitting
+                    ? "Salvando..."
+                    : editingCategory
+                      ? "Atualizar"
+                      : "Criar"}
                 </button>
               </div>
             </form>
@@ -394,5 +481,5 @@ export function Categories() {
         </div>
       )}
     </div>
-  )
+  );
 }

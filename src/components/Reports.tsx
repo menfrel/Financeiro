@@ -97,17 +97,34 @@ export function Reports() {
 
   const loadInitialData = async () => {
     try {
-      // Load accounts
-      const { data: accountsData } = await supabase
+      // Verificar se o usuário está autenticado
+      if (!user?.id) {
+        console.error("Usuário não autenticado");
+        return;
+      }
+
+      // Load accounts - garantir isolamento por usuário
+      const { data: accountsData, error: accountsError } = await supabase
         .from("accounts")
         .select("*")
-        .eq("user_id", user!.id);
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-      // Load categories
-      const { data: categoriesData } = await supabase
+      if (accountsError) {
+        console.error("Error loading accounts:", accountsError);
+      }
+
+      // Load categories - garantir isolamento por usuário
+      const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
         .select("*")
-        .eq("user_id", user!.id);
+        .eq("user_id", user.id)
+        .order("type", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (categoriesError) {
+        console.error("Error loading categories:", categoriesError);
+      }
 
       setAccounts(accountsData || []);
       setCategories(categoriesData || []);
@@ -120,17 +137,24 @@ export function Reports() {
     try {
       setLoading(true);
 
-      // Build query filters
+      // Verificar se o usuário está autenticado
+      if (!user?.id) {
+        console.error("Usuário não autenticado");
+        setLoading(false);
+        return;
+      }
+
+      // Build query filters - garantir isolamento por usuário
       let query = supabase
         .from("transactions")
         .select(
           `
           *,
-          categories (name, color, type),
-          accounts (name)
+          categories!inner (name, color, type),
+          accounts!inner (name)
         `,
         )
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .gte("date", filters.startDate)
         .lte("date", filters.endDate);
 
@@ -410,11 +434,24 @@ export function Reports() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Todas as categorias</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
+              <optgroup label="Receitas">
+                {categories
+                  .filter((cat) => cat.type === "income")
+                  .map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+              </optgroup>
+              <optgroup label="Despesas">
+                {categories
+                  .filter((cat) => cat.type === "expense")
+                  .map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+              </optgroup>
             </select>
           </div>
         </div>

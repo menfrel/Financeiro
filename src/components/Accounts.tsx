@@ -58,11 +58,17 @@ export function Accounts() {
 
   const recalculateAccountBalances = async () => {
     try {
+      // Verificar se o usuário está autenticado
+      if (!user?.id) {
+        console.error("Usuário não autenticado");
+        return;
+      }
+
       // Buscar todas as contas
       const { data: accounts } = await supabase
         .from("accounts")
         .select("*")
-        .eq("user_id", user!.id);
+        .eq("user_id", user.id);
 
       if (!accounts) return;
 
@@ -111,6 +117,13 @@ export function Accounts() {
     try {
       setLoading(true);
 
+      // Verificar se o usuário está autenticado
+      if (!user?.id) {
+        console.error("Usuário não autenticado");
+        setLoading(false);
+        return;
+      }
+
       // Primeiro, recalcular os saldos
       await recalculateAccountBalances();
 
@@ -118,7 +131,7 @@ export function Accounts() {
       const { data, error } = await supabase
         .from("accounts")
         .select("*")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;

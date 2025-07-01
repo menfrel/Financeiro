@@ -26,7 +26,7 @@ interface Budget {
     name: string;
     color: string;
     type: "income" | "expense";
-  };
+  } | null;
 }
 
 interface BudgetForm {
@@ -69,38 +69,62 @@ export function Budgets() {
     try {
       setLoading(true);
 
-      // Load budgets
-      const { data: budgetsData } = await supabase
+      // Verificar se o usuário está autenticado
+      if (!user?.id) {
+        console.error("Usuário não autenticado");
+        setLoading(false);
+        return;
+      }
+
+      // Load budgets - garantir isolamento por usuário
+      const { data: budgetsData, error: budgetsError } = await supabase
         .from("budgets")
         .select(
           `
           *,
-          categories (id, name, color, type)
+          categories!inner (id, name, color, type)
         `,
         )
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      // Load expense categories
-      const { data: categoriesData } = await supabase
+      if (budgetsError) {
+        console.error("Error loading budgets:", budgetsError);
+      }
+
+      // Load expense categories - garantir isolamento por usuário
+      const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
         .select("*")
-        .eq("user_id", user!.id)
-        .eq("type", "expense");
+        .eq("user_id", user.id)
+        .eq("type", "expense")
+        .order("name", { ascending: true });
+
+      if (categoriesError) {
+        console.error("Error loading categories:", categoriesError);
+      }
 
       setCategories(categoriesData || []);
 
       // Calculate spent amounts for each budget
       const budgetsWithSpent = await Promise.all(
         (budgetsData || []).map(async (budget) => {
-          const { data: transactions } = await supabase
-            .from("transactions")
-            .select("amount")
-            .eq("user_id", user!.id)
-            .eq("category_id", budget.category_id)
-            .eq("type", "expense")
-            .gte("date", budget.start_date)
-            .lte("date", budget.end_date);
+          const { data: transactions, error: transactionsError } =
+            await supabase
+              .from("transactions")
+              .select("amount")
+              .eq("user_id", user.id)
+              .eq("category_id", budget.category_id)
+              .eq("type", "expense")
+              .gte("date", budget.start_date)
+              .lte("date", budget.end_date);
+
+          if (transactionsError) {
+            console.error(
+              "Error loading transactions for budget:",
+              transactionsError,
+            );
+          }
 
           const spent =
             transactions?.reduce((sum, t) => sum + t.amount, 0) || 0;
@@ -166,7 +190,7 @@ export function Budgets() {
 
   const handleEdit = (budget: Budget) => {
     setEditingBudget(budget);
-    setValue("category_id", budget.category.id);
+    setValue("category_id", budget.category?.id || "");
     setValue("amount", budget.amount);
     setValue("start_date", budget.start_date);
     setValue("end_date", budget.end_date);
@@ -303,17 +327,26 @@ export function Budgets() {
                   <div className="flex items-center space-x-3">
                     <div
                       className="w-4 h-4 rounded-full"
-                      style={{ backgroundColor: budget.category.color }}
+                      style={{
+                        backgroundColor: budget.category?.color || "#6B7280",
+                      }}
                     />
                     <div>
                       <h3 className="font-semibold text-gray-900">
-                        {budget.category.name}
+                        {budget.category?.name || "Categoria não encontrada"}
                       </h3>
                       <p className="text-sm text-gray-600">
                         {format(new Date(budget.start_date), "MMM yyyy", {
                           locale: ptBR,
                         })}
                       </p>
+                      {budget.category?.type && (
+                        <p className="text-xs text-gray-500 capitalize">
+                          {budget.category.type === "income"
+                            ? "Receita"
+                            : "Despesa"}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center space-x-1">
