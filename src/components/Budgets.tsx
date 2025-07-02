@@ -21,6 +21,7 @@ interface Budget {
   start_date: string;
   end_date: string;
   created_at: string;
+  category_id: string;
   category: {
     id: string;
     name: string;
@@ -69,30 +70,44 @@ export function Budgets() {
     try {
       setLoading(true);
 
-      // Verificar se o usuário está autenticado
       if (!user?.id) {
         console.error("Usuário não autenticado");
         setLoading(false);
         return;
       }
 
-      // Load budgets - garantir isolamento por usuário
+      console.log("=== DEBUG ORÇAMENTOS - CARREGAMENTO ===");
+      console.log("User ID:", user.id);
+
+      // Load budgets with explicit join and error handling
       const { data: budgetsData, error: budgetsError } = await supabase
         .from("budgets")
-        .select(
-          `
-          *,
-          categories!inner (id, name, color, type)
-        `,
-        )
+        .select(`
+          id,
+          amount,
+          period,
+          start_date,
+          end_date,
+          created_at,
+          category_id,
+          categories!budgets_category_id_fkey (
+            id,
+            name,
+            color,
+            type
+          )
+        `)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
+      console.log("Budgets query result:", { budgetsData, budgetsError });
+
       if (budgetsError) {
         console.error("Error loading budgets:", budgetsError);
+        throw budgetsError;
       }
 
-      // Load expense categories - garantir isolamento por usuário
+      // Load expense categories
       const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
         .select("*")
@@ -100,34 +115,56 @@ export function Budgets() {
         .eq("type", "expense")
         .order("name", { ascending: true });
 
+      console.log("Categories query result:", { categoriesData, categoriesError });
+
       if (categoriesError) {
         console.error("Error loading categories:", categoriesError);
+        throw categoriesError;
       }
 
       setCategories(categoriesData || []);
 
-      // Calculate spent amounts for each budget
-      const budgetsWithSpent = await Promise.all(
+      // Process budgets and fix category mapping
+      const processedBudgets = await Promise.all(
         (budgetsData || []).map(async (budget) => {
-          const { data: transactions, error: transactionsError } =
-            await supabase
-              .from("transactions")
-              .select("amount")
+          console.log("Processing budget:", budget);
+          
+          // If category is null or missing, try to fetch it directly
+          let categoryInfo = budget.categories;
+          
+          if (!categoryInfo && budget.category_id) {
+            console.log("Category missing, fetching directly for category_id:", budget.category_id);
+            
+            const { data: directCategory, error: directCategoryError } = await supabase
+              .from("categories")
+              .select("id, name, color, type")
+              .eq("id", budget.category_id)
               .eq("user_id", user.id)
-              .eq("category_id", budget.category_id)
-              .eq("type", "expense")
-              .gte("date", budget.start_date)
-              .lte("date", budget.end_date);
+              .single();
 
-          if (transactionsError) {
-            console.error(
-              "Error loading transactions for budget:",
-              transactionsError,
-            );
+            if (directCategoryError) {
+              console.error("Error fetching category directly:", directCategoryError);
+            } else {
+              categoryInfo = directCategory;
+              console.log("Found category directly:", directCategory);
+            }
           }
 
-          const spent =
-            transactions?.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
+          // Calculate spent amount for this budget
+          const { data: transactions, error: transactionsError } = await supabase
+            .from("transactions")
+            .select("amount")
+            .eq("user_id", user.id)
+            .eq("category_id", budget.category_id)
+            .eq("type", "expense")
+            .gte("date", budget.start_date)
+            .lte("date", budget.end_date);
+
+          if (transactionsError) {
+            console.error("Error loading transactions for budget:", transactionsError);
+          }
+
+          const spent = transactions?.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
           const budgetAmount = parseFloat(budget.amount) || 0;
           const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
 
@@ -135,17 +172,22 @@ export function Budgets() {
           if (percentage >= 100) status = "danger";
           else if (percentage >= 80) status = "warning";
 
-          return {
+          const processedBudget = {
             ...budget,
             amount: budgetAmount,
+            category: categoryInfo,
             spent,
             percentage,
             status,
           };
+
+          console.log("Processed budget:", processedBudget);
+          return processedBudget;
         }),
       );
 
-      setBudgets(budgetsWithSpent);
+      console.log("Final processed budgets:", processedBudgets);
+      setBudgets(processedBudgets);
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -170,7 +212,8 @@ export function Budgets() {
         const { error } = await supabase
           .from("budgets")
           .update(budgetData)
-          .eq("id", editingBudget.id);
+          .eq("id", editingBudget.id)
+          .eq("user_id", user!.id);
 
         if (error) throw error;
       } else {
@@ -185,6 +228,7 @@ export function Budgets() {
       reset();
     } catch (error) {
       console.error("Error saving budget:", error);
+      alert("Erro ao salvar orçamento. Verifique se a categoria existe.");
     } finally {
       setSubmitting(false);
     }
@@ -192,7 +236,7 @@ export function Budgets() {
 
   const handleEdit = (budget: Budget) => {
     setEditingBudget(budget);
-    setValue("category_id", budget.category?.id || "");
+    setValue("category_id", budget.category_id || "");
     setValue("amount", budget.amount);
     setValue("start_date", budget.start_date);
     setValue("end_date", budget.end_date);
@@ -206,7 +250,8 @@ export function Budgets() {
       const { error } = await supabase
         .from("budgets")
         .delete()
-        .eq("id", budgetId);
+        .eq("id", budgetId)
+        .eq("user_id", user!.id);
 
       if (error) throw error;
       await loadData();
@@ -227,7 +272,6 @@ export function Budgets() {
   };
 
   const formatCurrency = (value: number | null | undefined) => {
-    // Garantir que o valor seja um número válido
     const numericValue = typeof value === "number" && !isNaN(value) ? value : 0;
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -320,6 +364,9 @@ export function Budgets() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {budgets.map((budget) => {
             const StatusIcon = getStatusIcon(budget.status);
+            const categoryName = budget.category?.name || "Categoria não encontrada";
+            const categoryColor = budget.category?.color || "#6B7280";
+            
             return (
               <div
                 key={budget.id}
@@ -329,13 +376,11 @@ export function Budgets() {
                   <div className="flex items-center space-x-3">
                     <div
                       className="w-4 h-4 rounded-full"
-                      style={{
-                        backgroundColor: budget.category?.color || "#6B7280",
-                      }}
+                      style={{ backgroundColor: categoryColor }}
                     />
                     <div>
                       <h3 className="font-semibold text-gray-900">
-                        {budget.category?.name || "Categoria não encontrada"}
+                        {categoryName}
                       </h3>
                       <p className="text-sm text-gray-600">
                         {format(parse(budget.start_date, "yyyy-MM-dd", new Date()), "MMM yyyy", {
@@ -344,9 +389,12 @@ export function Budgets() {
                       </p>
                       {budget.category?.type && (
                         <p className="text-xs text-gray-500 capitalize">
-                          {budget.category.type === "income"
-                            ? "Receita"
-                            : "Despesa"}
+                          {budget.category.type === "income" ? "Receita" : "Despesa"}
+                        </p>
+                      )}
+                      {!budget.category && (
+                        <p className="text-xs text-red-500">
+                          ⚠️ Categoria não encontrada (ID: {budget.category_id})
                         </p>
                       )}
                     </div>
@@ -456,6 +504,11 @@ export function Budgets() {
                     {errors.category_id.message}
                   </p>
                 )}
+                {categories.length === 0 && (
+                  <p className="text-yellow-600 text-sm mt-1">
+                    ⚠️ Nenhuma categoria de despesa encontrada. Crie categorias primeiro.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -531,7 +584,7 @@ export function Budgets() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || categories.length === 0}
                   className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
                   {submitting
