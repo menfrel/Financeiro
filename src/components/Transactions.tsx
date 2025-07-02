@@ -4,14 +4,13 @@ import { useAuth } from "../hooks/useAuth";
 import {
   Plus,
   ArrowUpRight,
-  ArrowDownRight,
-  Edit2,
-  Trash2,
   Filter,
-  Calendar,
+  Search,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format, parse } from "date-fns";
+import { TransactionCard } from "./TransactionCard";
+import { LayoutToggle } from "./LayoutToggle";
 
 interface Transaction {
   id: string;
@@ -44,10 +43,11 @@ export function Transactions() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] =
-    useState<Transaction | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [isDetailed, setIsDetailed] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState({
     type: "",
     account: "",
@@ -76,7 +76,6 @@ export function Transactions() {
   const recalculateAccountBalances = async (accountIds: string[]) => {
     try {
       for (const accountId of accountIds) {
-        // Buscar a conta
         const { data: account } = await supabase
           .from("accounts")
           .select("*")
@@ -85,7 +84,6 @@ export function Transactions() {
 
         if (!account) continue;
 
-        // Buscar todas as transações da conta
         const { data: transactions } = await supabase
           .from("transactions")
           .select("amount, type")
@@ -102,7 +100,6 @@ export function Transactions() {
 
         const calculatedBalance = initialBalance + transactionBalance;
 
-        // Atualizar o saldo atual
         await supabase
           .from("accounts")
           .update({
@@ -120,14 +117,12 @@ export function Transactions() {
     try {
       setLoading(true);
 
-      // Verificar se o usuário está autenticado
       if (!user?.id) {
         console.error("Usuário não autenticado");
         setLoading(false);
         return;
       }
 
-      // Load transactions - garantir isolamento por usuário
       const { data: transactionsData } = await supabase
         .from("transactions")
         .select(
@@ -140,14 +135,12 @@ export function Transactions() {
         .eq("user_id", user.id)
         .order("date", { ascending: false });
 
-      // Load accounts - garantir isolamento por usuário
       const { data: accountsData } = await supabase
         .from("accounts")
         .select("*")
         .eq("user_id", user.id)
         .order("name", { ascending: true });
 
-      // Load categories - garantir isolamento por usuário
       const { data: categoriesData } = await supabase
         .from("categories")
         .select("*")
@@ -155,7 +148,6 @@ export function Transactions() {
         .order("type", { ascending: true })
         .order("name", { ascending: true });
 
-      // Validar dados das transações
       const validatedTransactions = (transactionsData || []).map(
         (transaction) => ({
           ...transaction,
@@ -163,7 +155,6 @@ export function Transactions() {
         }),
       );
 
-      // Validar dados das contas
       const validatedAccounts = (accountsData || []).map((account) => ({
         ...account,
         initial_balance: parseFloat(account.initial_balance) || 0,
@@ -184,7 +175,6 @@ export function Transactions() {
     try {
       setSubmitting(true);
 
-      // Verificar se o usuário está autenticado
       if (!user?.id) {
         console.error("Usuário não autenticado");
         return;
@@ -199,14 +189,11 @@ export function Transactions() {
         account_id: data.account_id,
         category_id: data.category_id,
         is_recurring: data.is_recurring,
-        recurring_frequency: data.is_recurring
-          ? data.recurring_frequency
-          : null,
+        recurring_frequency: data.is_recurring ? data.recurring_frequency : null,
         recurring_until: data.is_recurring ? data.recurring_until : null,
       };
 
       if (editingTransaction) {
-        // Garantir que só pode editar transações do próprio usuário
         const { error } = await supabase
           .from("transactions")
           .update(transactionData)
@@ -222,7 +209,6 @@ export function Transactions() {
         if (error) throw error;
       }
 
-      // Recalcular saldos das contas afetadas
       await recalculateAccountBalances(
         [data.account_id, editingTransaction?.account?.id].filter(Boolean),
       );
@@ -260,11 +246,9 @@ export function Transactions() {
     if (!confirm("Deseja realmente excluir esta transação?")) return;
 
     try {
-      // Encontrar a transação para saber qual conta recalcular
       const transaction = transactions.find((t) => t.id === transactionId);
       const accountId = transaction?.account?.id;
 
-      // Garantir que só pode deletar transações do próprio usuário
       const { error } = await supabase
         .from("transactions")
         .delete()
@@ -273,7 +257,6 @@ export function Transactions() {
 
       if (error) throw error;
 
-      // Recalcular saldo da conta afetada
       if (accountId) {
         await recalculateAccountBalances([accountId]);
       }
@@ -291,21 +274,16 @@ export function Transactions() {
     setIsModalOpen(true);
   };
 
-  const formatCurrency = (value: number | null | undefined) => {
-    // Garantir que o valor seja um número válido
-    const numericValue = typeof value === "number" && !isNaN(value) ? value : 0;
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(numericValue);
-  };
-
   const filteredTransactions = transactions.filter((transaction) => {
+    // Search filter
+    if (searchTerm && !transaction.description.toLowerCase().includes(searchTerm.toLowerCase())) {
+      return false;
+    }
+    
+    // Other filters
     if (filter.type && transaction.type !== filter.type) return false;
-    if (filter.account && transaction.account?.id !== filter.account)
-      return false;
-    if (filter.category && transaction.category?.id !== filter.category)
-      return false;
+    if (filter.account && transaction.account?.id !== filter.account) return false;
+    if (filter.category && transaction.category?.id !== filter.category) return false;
     if (filter.startDate && transaction.date < filter.startDate) return false;
     if (filter.endDate && transaction.date > filter.endDate) return false;
     return true;
@@ -338,104 +316,129 @@ export function Transactions() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-8 space-y-4 lg:space-y-0">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Lançamentos</h1>
           <p className="text-gray-600 mt-2">
             Registre suas receitas e despesas
           </p>
         </div>
-        <button
-          onClick={openModal}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Novo Lançamento</span>
-        </button>
+        
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+          <LayoutToggle 
+            isDetailed={isDetailed} 
+            onToggle={setIsDetailed}
+          />
+          <button
+            onClick={openModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Novo Lançamento</span>
+          </button>
+        </div>
       </div>
 
-      {/* Filters */}
+      {/* Search and Filters */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
         <div className="flex items-center space-x-2 mb-4">
           <Filter className="w-5 h-5 text-gray-600" />
-          <span className="font-medium text-gray-900">Filtros</span>
+          <span className="font-medium text-gray-900">Filtros e Busca</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <select
-            value={filter.type}
-            onChange={(e) =>
-              setFilter((prev) => ({ ...prev, type: e.target.value }))
-            }
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Todos os tipos</option>
-            <option value="income">Receitas</option>
-            <option value="expense">Despesas</option>
-          </select>
+        <div className="space-y-4">
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar por descrição..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
 
-          <select
-            value={filter.account}
-            onChange={(e) =>
-              setFilter((prev) => ({ ...prev, account: e.target.value }))
-            }
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Todas as contas</option>
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name}
-              </option>
-            ))}
-          </select>
+          {/* Filter Controls */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <select
+              value={filter.type}
+              onChange={(e) =>
+                setFilter((prev) => ({ ...prev, type: e.target.value }))
+              }
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos os tipos</option>
+              <option value="income">Receitas</option>
+              <option value="expense">Despesas</option>
+            </select>
 
-          <select
-            value={filter.category}
-            onChange={(e) =>
-              setFilter((prev) => ({ ...prev, category: e.target.value }))
-            }
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Todas as categorias</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+            <select
+              value={filter.account}
+              onChange={(e) =>
+                setFilter((prev) => ({ ...prev, account: e.target.value }))
+              }
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todas as contas</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
+                </option>
+              ))}
+            </select>
 
-          <input
-            type="date"
-            value={filter.startDate}
-            onChange={(e) =>
-              setFilter((prev) => ({ ...prev, startDate: e.target.value }))
-            }
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Data inicial"
-          />
+            <select
+              value={filter.category}
+              onChange={(e) =>
+                setFilter((prev) => ({ ...prev, category: e.target.value }))
+              }
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todas as categorias</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
 
-          <input
-            type="date"
-            value={filter.endDate}
-            onChange={(e) =>
-              setFilter((prev) => ({ ...prev, endDate: e.target.value }))
-            }
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Data final"
-          />
+            <input
+              type="date"
+              value={filter.startDate}
+              onChange={(e) =>
+                setFilter((prev) => ({ ...prev, startDate: e.target.value }))
+              }
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Data inicial"
+            />
+
+            <input
+              type="date"
+              value={filter.endDate}
+              onChange={(e) =>
+                setFilter((prev) => ({ ...prev, endDate: e.target.value }))
+              }
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Data final"
+            />
+          </div>
         </div>
       </div>
 
       {/* Transactions List */}
-      <div className="space-y-4">
+      <div className={`${isDetailed ? 'space-y-6' : 'grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4'}`}>
         {filteredTransactions.length === 0 ? (
-          <div className="text-center py-12">
+          <div className="col-span-full text-center py-12">
             <ArrowUpRight className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               Nenhum lançamento encontrado
             </h3>
             <p className="text-gray-600 mb-6">
-              Registre seu primeiro lançamento para começar
+              {searchTerm || Object.values(filter).some(v => v) 
+                ? "Tente ajustar os filtros de busca" 
+                : "Registre seu primeiro lançamento para começar"
+              }
             </p>
             <button
               onClick={openModal}
@@ -446,82 +449,13 @@ export function Transactions() {
           </div>
         ) : (
           filteredTransactions.map((transaction) => (
-            <div
+            <TransactionCard
               key={transaction.id}
-              className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                      transaction.type === "income"
-                        ? "bg-green-100"
-                        : "bg-red-100"
-                    }`}
-                  >
-                    {transaction.type === "income" ? (
-                      <ArrowUpRight className="w-6 h-6 text-green-600" />
-                    ) : (
-                      <ArrowDownRight className="w-6 h-6 text-red-600" />
-                    )}
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <h3 className="font-semibold text-gray-900">
-                        {transaction.description}
-                      </h3>
-                      {transaction.is_recurring && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                          Recorrente
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
-                      <span>
-                        {transaction.category?.name || "Sem categoria"}
-                      </span>
-                      <span>•</span>
-                      <span>{transaction.account?.name || "Sem conta"}</span>
-                      <span>•</span>
-                      <span>
-                        {format(parse(transaction.date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy")}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-4">
-                  <div className="text-right">
-                    <p
-                      className={`text-xl font-bold ${
-                        transaction.type === "income"
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {transaction.type === "income" ? "+" : "-"}
-                      {formatCurrency(transaction.amount)}
-                    </p>
-                  </div>
-
-                  <div className="flex space-x-1">
-                    <button
-                      onClick={() => handleEdit(transaction)}
-                      className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(transaction.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+              transaction={transaction}
+              isDetailed={isDetailed}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
           ))
         )}
       </div>
