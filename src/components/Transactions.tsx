@@ -11,7 +11,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 
 interface Transaction {
   id: string;
@@ -485,7 +485,7 @@ export function Transactions() {
                       <span>{transaction.account?.name || "Sem conta"}</span>
                       <span>•</span>
                       <span>
-                        {format(new Date(transaction.date), "dd/MM/yyyy")}
+                        {format(parse(transaction.date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy")}
                       </span>
                     </div>
                   </div>

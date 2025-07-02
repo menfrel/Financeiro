@@ -27,3 +27,4 @@ dist-ssr
 # Tempo
 **/tempobook/dynamic/
 **/tempobook/storyboards/
+/.vs

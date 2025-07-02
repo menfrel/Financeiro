@@ -11,7 +11,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
+import { format, startOfMonth, endOfMonth, isWithinInterval, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface Budget {
@@ -338,7 +338,7 @@ export function Budgets() {
                         {budget.category?.name || "Categoria não encontrada"}
                       </h3>
                       <p className="text-sm text-gray-600">
-                        {format(new Date(budget.start_date), "MMM yyyy", {
+                        {format(parse(budget.start_date, "yyyy-MM-dd", new Date()), "MMM yyyy", {
                           locale: ptBR,
                         })}
                       </p>

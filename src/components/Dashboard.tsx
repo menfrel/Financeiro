@@ -9,7 +9,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
-import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   PieChart,
@@ -490,7 +490,7 @@ export function Dashboard() {
                       {formatCurrency(transaction.amount)}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {format(new Date(transaction.date), "dd/MM/yyyy")}
+                      {format(parse(transaction.date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy")}
                     </p>
                   </div>
                 </div>
