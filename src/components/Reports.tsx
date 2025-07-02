@@ -9,6 +9,8 @@ import {
   TrendingUp,
   TrendingDown,
   PieChart,
+  FileDown,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   format,
@@ -33,6 +35,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { generatePDFReport, generateDetailedPDFReport } from "../utils/pdfGenerator";
 
 interface ReportData {
   totalIncome: number;
@@ -63,6 +66,16 @@ interface ReportData {
   }>;
 }
 
+interface Transaction {
+  id: string;
+  description: string;
+  amount: number;
+  type: 'income' | 'expense';
+  date: string;
+  category: string;
+  account: string;
+}
+
 export function Reports() {
   const { user } = useAuth();
   const [reportData, setReportData] = useState<ReportData>({
@@ -74,7 +87,9 @@ export function Reports() {
     expensesByCategory: [],
     topExpenseCategories: [],
   });
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportingPDF, setExportingPDF] = useState(false);
   const [filters, setFilters] = useState({
     startDate: format(startOfMonth(subMonths(new Date(), 5)), "yyyy-MM-dd"),
     endDate: format(endOfMonth(new Date()), "yyyy-MM-dd"),
@@ -143,53 +158,7 @@ export function Reports() {
         return;
       }
 
-      console.log("=== RELATÓRIOS DEBUG DETALHADO ===");
-      console.log("User ID:", user.id);
-      console.log("Filtros aplicados:", filters);
-      console.log("Data inicial:", filters.startDate);
-      console.log("Data final:", filters.endDate);
-
-      // Primeiro, vamos buscar TODAS as transações do usuário para debug
-      const { data: allTransactions, error: allError } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false });
-
-      if (allError) {
-        console.error("Erro ao buscar todas as transações:", allError);
-      } else {
-        console.log("Total de transações do usuário:", allTransactions?.length || 0);
-        
-        // Debug das receitas
-        const allIncomes = allTransactions?.filter(t => t.type === "income") || [];
-        console.log("Total de receitas no banco:", allIncomes.length);
-        
-        if (allIncomes.length > 0) {
-          console.log("Receitas encontradas no banco:");
-          allIncomes.forEach(income => {
-            console.log(`- ID: ${income.id}, Valor: ${income.amount}, Data: ${income.date}, Tipo: ${income.type}`);
-          });
-        }
-
-        // Debug das transações no período
-        const transactionsInPeriod = allTransactions?.filter(t => 
-          t.date >= filters.startDate && t.date <= filters.endDate
-        ) || [];
-        console.log("Transações no período filtrado:", transactionsInPeriod.length);
-        
-        const incomesInPeriod = transactionsInPeriod.filter(t => t.type === "income");
-        console.log("Receitas no período:", incomesInPeriod.length);
-        
-        if (incomesInPeriod.length > 0) {
-          console.log("Receitas no período:");
-          incomesInPeriod.forEach(income => {
-            console.log(`- Valor: ${income.amount}, Data: ${income.date}`);
-          });
-        }
-      }
-
-      // Agora vamos fazer a consulta com joins para os relatórios
+      // Load transactions with joins
       let transactionsQuery = supabase
         .from("transactions")
         .select(`
@@ -217,7 +186,7 @@ export function Reports() {
         .lte("date", filters.endDate)
         .order("date", { ascending: false });
 
-      // Aplicar filtros adicionais
+      // Apply additional filters
       if (filters.accountId) {
         transactionsQuery = transactionsQuery.eq("account_id", filters.accountId);
       }
@@ -226,18 +195,15 @@ export function Reports() {
         transactionsQuery = transactionsQuery.eq("category_id", filters.categoryId);
       }
 
-      const { data: transactions, error: transactionsError } = await transactionsQuery;
+      const { data: transactionsData, error: transactionsError } = await transactionsQuery;
 
       if (transactionsError) {
-        console.error("Erro ao carregar transações com joins:", transactionsError);
+        console.error("Erro ao carregar transações:", transactionsError);
         setLoading(false);
         return;
       }
 
-      console.log("Transações carregadas com joins:", transactions?.length || 0);
-
-      if (!transactions || transactions.length === 0) {
-        console.log("Nenhuma transação encontrada no período com joins");
+      if (!transactionsData || transactionsData.length === 0) {
         setReportData({
           totalIncome: 0,
           totalExpenses: 0,
@@ -247,12 +213,13 @@ export function Reports() {
           expensesByCategory: [],
           topExpenseCategories: [],
         });
+        setTransactions([]);
         setLoading(false);
         return;
       }
 
-      // Validar e processar transações
-      const validTransactions = transactions.map(t => {
+      // Validate and process transactions
+      const validTransactions = transactionsData.map(t => {
         const amount = parseFloat(String(t.amount)) || 0;
         return {
           ...t,
@@ -260,65 +227,16 @@ export function Reports() {
         };
       });
 
-      console.log("Transações validadas:", validTransactions.length);
-
-      // Separar por tipo
+      // Separate by type
       const incomeTransactions = validTransactions.filter(t => t.type === "income");
       const expenseTransactions = validTransactions.filter(t => t.type === "expense");
 
-      console.log("Receitas após join:", incomeTransactions.length);
-      console.log("Despesas após join:", expenseTransactions.length);
-
-      // Debug detalhado das receitas
-      if (incomeTransactions.length > 0) {
-        console.log("Detalhes das receitas após join:");
-        incomeTransactions.forEach(t => {
-          console.log(`- ${t.description}: R$ ${t.amount} (${t.date}) - Categoria: ${t.categories?.name || 'N/A'}`);
-        });
-      } else {
-        console.log("PROBLEMA: Nenhuma receita encontrada após o join!");
-        
-        // Vamos verificar se o problema está no join
-        const { data: simpleIncomes } = await supabase
-          .from("transactions")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("type", "income")
-          .gte("date", filters.startDate)
-          .lte("date", filters.endDate);
-          
-        console.log("Receitas sem join:", simpleIncomes?.length || 0);
-        
-        if (simpleIncomes && simpleIncomes.length > 0) {
-          console.log("Receitas encontradas sem join - problema está no join!");
-          simpleIncomes.forEach(income => {
-            console.log(`- Receita sem join: ${income.description}, Valor: ${income.amount}, Category ID: ${income.category_id}`);
-          });
-          
-          // Verificar se as categorias existem
-          for (const income of simpleIncomes) {
-            const { data: category } = await supabase
-              .from("categories")
-              .select("*")
-              .eq("id", income.category_id)
-              .single();
-              
-            console.log(`Categoria para receita ${income.id}:`, category);
-          }
-        }
-      }
-
-      // Calcular totais
+      // Calculate totals
       const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
       const totalExpenses = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
       const balance = totalIncome - totalExpenses;
 
-      console.log("=== TOTAIS CALCULADOS ===");
-      console.log("Total de receitas:", totalIncome);
-      console.log("Total de despesas:", totalExpenses);
-      console.log("Saldo:", balance);
-
-      // Agrupar por categoria
+      // Group by category
       const categoryGroups = validTransactions.reduce((acc: any, transaction: any) => {
         const categoryName = transaction.categories?.name || "Sem categoria";
         const categoryColor = transaction.categories?.color || "#6B7280";
@@ -343,14 +261,14 @@ export function Reports() {
 
       const transactionsByCategory = Object.values(categoryGroups);
 
-      // Tendência mensal (últimos 6 meses)
+      // Monthly trend (last 6 months)
       const monthlyTrend = [];
       for (let i = 5; i >= 0; i--) {
         const month = subMonths(new Date(), i);
         const monthStart = format(startOfMonth(month), "yyyy-MM-dd");
         const monthEnd = format(endOfMonth(month), "yyyy-MM-dd");
 
-        // Filtrar transações do mês
+        // Filter transactions for the month
         const monthTransactions = validTransactions.filter((t) => {
           return t.date >= monthStart && t.date <= monthEnd;
         });
@@ -371,7 +289,7 @@ export function Reports() {
         });
       }
 
-      // Despesas por categoria para gráfico de pizza
+      // Expenses by category for pie chart
       const expensesByCategory = expenseTransactions
         .reduce((acc: any[], transaction: any) => {
           const categoryName = transaction.categories?.name || "Sem categoria";
@@ -393,7 +311,7 @@ export function Reports() {
         .sort((a, b) => b.value - a.value)
         .slice(0, 8);
 
-      // Top categorias de despesa
+      // Top expense categories
       const topExpenseCategories = expensesByCategory
         .slice(0, 5)
         .map((cat) => ({
@@ -403,14 +321,16 @@ export function Reports() {
           color: cat.color,
         }));
 
-      console.log("=== DADOS FINAIS ===");
-      console.log("Dados do relatório:", {
-        totalIncome,
-        totalExpenses,
-        balance,
-        categoriesCount: transactionsByCategory.length,
-        monthlyTrendCount: monthlyTrend.length,
-      });
+      // Format transactions for PDF export
+      const formattedTransactions: Transaction[] = validTransactions.map(t => ({
+        id: t.id,
+        description: t.description,
+        amount: t.amount,
+        type: t.type as 'income' | 'expense',
+        date: t.date,
+        category: t.categories?.name || "Sem categoria",
+        account: t.accounts?.name || "Sem conta",
+      }));
 
       setReportData({
         totalIncome,
@@ -421,6 +341,7 @@ export function Reports() {
         expensesByCategory,
         topExpenseCategories,
       });
+      setTransactions(formattedTransactions);
     } catch (error) {
       console.error("Erro ao carregar dados do relatório:", error);
     } finally {
@@ -454,6 +375,31 @@ export function Reports() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+  };
+
+  const exportToPDF = async (detailed: boolean = false) => {
+    try {
+      setExportingPDF(true);
+      
+      const pdfData = {
+        ...reportData,
+        period: {
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        },
+      };
+
+      if (detailed) {
+        await generateDetailedPDFReport(pdfData, user?.email || '', transactions);
+      } else {
+        await generatePDFReport(pdfData, user?.email || '');
+      }
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Erro ao gerar relatório PDF");
+    } finally {
+      setExportingPDF(false);
     }
   };
 
@@ -495,13 +441,31 @@ export function Reports() {
             Análise detalhada das suas finanças
           </p>
         </div>
-        <button
-          onClick={exportToCSV}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          <span>Exportar CSV</span>
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={exportToCSV}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Exportar CSV</span>
+          </button>
+          <button
+            onClick={() => exportToPDF(false)}
+            disabled={exportingPDF}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors disabled:opacity-50"
+          >
+            <FileDown className="w-4 h-4" />
+            <span>{exportingPDF ? "Gerando..." : "PDF Resumo"}</span>
+          </button>
+          <button
+            onClick={() => exportToPDF(true)}
+            disabled={exportingPDF}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors disabled:opacity-50"
+          >
+            <FileText className="w-4 h-4" />
+            <span>{exportingPDF ? "Gerando..." : "PDF Detalhado"}</span>
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
