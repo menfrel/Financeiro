@@ -34,20 +34,28 @@ interface Transaction {
   account: string;
 }
 
+// Modern color palette
+const colors = {
+  primary: [99, 102, 241],      // indigo-500
+  secondary: [139, 92, 246],    // violet-500
+  success: [34, 197, 94],       // green-500
+  danger: [239, 68, 68],        // red-500
+  warning: [245, 158, 11],      // amber-500
+  info: [59, 130, 246],         // blue-500
+  dark: [17, 24, 39],           // gray-900
+  light: [249, 250, 251],       // gray-50
+  white: [255, 255, 255],
+  gradient1: [99, 102, 241],    // indigo-500
+  gradient2: [139, 92, 246],    // violet-500
+};
+
 export const generatePDFReport = async (data: ReportData, userEmail: string) => {
   const pdf = new jsPDF('p', 'mm', 'a4');
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const margin = 20;
+  const margin = 15;
   const contentWidth = pageWidth - (margin * 2);
   
-  // Colors
-  const primaryColor = [37, 99, 235]; // blue-600
-  const successColor = [5, 150, 105]; // emerald-600
-  const dangerColor = [220, 38, 38]; // red-600
-  const grayColor = [107, 114, 128]; // gray-500
-
-  // Helper function to format currency
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -55,229 +63,254 @@ export const generatePDFReport = async (data: ReportData, userEmail: string) => 
     }).format(value);
   };
 
-  // Helper function to add a new page if needed
-  const checkPageBreak = (currentY: number, requiredHeight: number) => {
-    if (currentY + requiredHeight > pageHeight - margin) {
-      pdf.addPage();
-      return margin;
+  const addGradientBackground = (x: number, y: number, width: number, height: number, color1: number[], color2: number[]) => {
+    // Simulate gradient with multiple rectangles
+    const steps = 20;
+    for (let i = 0; i < steps; i++) {
+      const ratio = i / steps;
+      const r = Math.round(color1[0] + (color2[0] - color1[0]) * ratio);
+      const g = Math.round(color1[1] + (color2[1] - color1[1]) * ratio);
+      const b = Math.round(color1[2] + (color2[2] - color1[2]) * ratio);
+      
+      pdf.setFillColor(r, g, b);
+      pdf.rect(x, y + (height * ratio), width, height / steps, 'F');
     }
-    return currentY;
   };
 
-  let currentY = margin;
+  const addModernCard = (x: number, y: number, width: number, height: number, title: string, value: string, subtitle: string, color: number[], icon?: string) => {
+    // Card shadow
+    pdf.setFillColor(0, 0, 0, 0.1);
+    pdf.roundedRect(x + 1, y + 1, width, height, 8, 8, 'F');
+    
+    // Card background
+    pdf.setFillColor(...colors.white);
+    pdf.roundedRect(x, y, width, height, 8, 8, 'F');
+    
+    // Card border
+    pdf.setDrawColor(229, 231, 235);
+    pdf.setLineWidth(0.5);
+    pdf.roundedRect(x, y, width, height, 8, 8, 'S');
+    
+    // Accent bar
+    pdf.setFillColor(...color);
+    pdf.roundedRect(x, y, width, 4, 8, 8, 'F');
+    pdf.rect(x, y + 2, width, 2, 'F');
+    
+    // Icon background
+    if (icon) {
+      pdf.setFillColor(color[0], color[1], color[2], 0.1);
+      pdf.circle(x + width - 20, y + 20, 12, 'F');
+      
+      // Icon (simplified representation)
+      pdf.setFillColor(...color);
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(icon, x + width - 24, y + 24);
+    }
+    
+    // Title
+    pdf.setTextColor(107, 114, 128);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(title, x + 12, y + 20);
+    
+    // Value
+    pdf.setTextColor(...color);
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(value, x + 12, y + 35);
+    
+    // Subtitle
+    pdf.setTextColor(156, 163, 175);
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(subtitle, x + 12, y + 45);
+  };
 
-  // Header
-  pdf.setFillColor(...primaryColor);
-  pdf.rect(0, 0, pageWidth, 60, 'F');
+  const addSectionHeader = (x: number, y: number, title: string, subtitle: string) => {
+    // Background
+    pdf.setFillColor(248, 250, 252);
+    pdf.roundedRect(x, y, contentWidth, 25, 6, 6, 'F');
+    
+    // Title
+    pdf.setTextColor(...colors.dark);
+    pdf.setFontSize(16);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(title, x + 15, y + 12);
+    
+    // Subtitle
+    pdf.setTextColor(107, 114, 128);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(subtitle, x + 15, y + 20);
+  };
+
+  let currentY = 0;
+
+  // Modern Header with Gradient
+  addGradientBackground(0, 0, pageWidth, 80, colors.gradient1, colors.gradient2);
   
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFontSize(24);
+  // Header content
+  pdf.setTextColor(...colors.white);
+  pdf.setFontSize(28);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('Relatório Financeiro', margin, 25);
+  pdf.text('RELATÓRIO FINANCEIRO', margin, 25);
+  
+  // Decorative line
+  pdf.setDrawColor(...colors.white);
+  pdf.setLineWidth(2);
+  pdf.line(margin, 35, margin + 100, 35);
   
   pdf.setFontSize(12);
   pdf.setFont('helvetica', 'normal');
-  pdf.text(`Período: ${format(new Date(data.period.startDate), 'dd/MM/yyyy', { locale: ptBR })} - ${format(new Date(data.period.endDate), 'dd/MM/yyyy', { locale: ptBR })}`, margin, 35);
-  pdf.text(`Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`, margin, 45);
-  pdf.text(`Usuário: ${userEmail}`, margin, 55);
+  pdf.text(`${format(new Date(data.period.startDate), 'dd/MM/yyyy', { locale: ptBR })} - ${format(new Date(data.period.endDate), 'dd/MM/yyyy', { locale: ptBR })}`, margin, 45);
+  pdf.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`, margin, 55);
+  pdf.text(`${userEmail}`, margin, 65);
 
-  currentY = 80;
+  currentY = 100;
 
-  // Summary Cards
-  pdf.setTextColor(0, 0, 0);
-  pdf.setFontSize(16);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Resumo do Período', margin, currentY);
-  currentY += 15;
+  // KPI Cards Section
+  addSectionHeader(margin, currentY, 'RESUMO EXECUTIVO', 'Principais indicadores do período');
+  currentY += 35;
 
-  // Income Card
-  pdf.setFillColor(240, 253, 244); // green-50
-  pdf.rect(margin, currentY, contentWidth / 3 - 5, 40, 'F');
-  pdf.setDrawColor(34, 197, 94); // green-500
-  pdf.setLineWidth(0.5);
-  pdf.rect(margin, currentY, contentWidth / 3 - 5, 40, 'S');
+  // Three modern KPI cards
+  const cardWidth = (contentWidth - 20) / 3;
   
-  pdf.setTextColor(...successColor);
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text('Total de Receitas', margin + 5, currentY + 10);
+  addModernCard(
+    margin, currentY, cardWidth, 60,
+    'RECEITAS TOTAIS',
+    formatCurrency(data.totalIncome),
+    'Entradas no período',
+    colors.success,
+    '↗'
+  );
   
-  pdf.setFontSize(14);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text(formatCurrency(data.totalIncome), margin + 5, currentY + 25);
-
-  // Expense Card
-  const expenseCardX = margin + (contentWidth / 3);
-  pdf.setFillColor(254, 242, 242); // red-50
-  pdf.rect(expenseCardX, currentY, contentWidth / 3 - 5, 40, 'F');
-  pdf.setDrawColor(239, 68, 68); // red-500
-  pdf.rect(expenseCardX, currentY, contentWidth / 3 - 5, 40, 'S');
+  addModernCard(
+    margin + cardWidth + 10, currentY, cardWidth, 60,
+    'DESPESAS TOTAIS', 
+    formatCurrency(data.totalExpenses),
+    'Saídas no período',
+    colors.danger,
+    '↘'
+  );
   
-  pdf.setTextColor(...dangerColor);
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text('Total de Despesas', expenseCardX + 5, currentY + 10);
-  
-  pdf.setFontSize(14);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text(formatCurrency(data.totalExpenses), expenseCardX + 5, currentY + 25);
+  addModernCard(
+    margin + (cardWidth + 10) * 2, currentY, cardWidth, 60,
+    'SALDO LÍQUIDO',
+    formatCurrency(data.balance),
+    data.balance >= 0 ? 'Resultado positivo' : 'Resultado negativo',
+    data.balance >= 0 ? colors.success : colors.danger,
+    data.balance >= 0 ? '✓' : '✗'
+  );
 
-  // Balance Card
-  const balanceCardX = margin + (contentWidth / 3) * 2;
-  const balanceColor = data.balance >= 0 ? [240, 253, 244] : [254, 242, 242]; // green-50 or red-50
-  const balanceBorderColor = data.balance >= 0 ? [34, 197, 94] : [239, 68, 68]; // green-500 or red-500
-  const balanceTextColor = data.balance >= 0 ? successColor : dangerColor;
-  
-  pdf.setFillColor(...balanceColor);
-  pdf.rect(balanceCardX, currentY, contentWidth / 3 - 5, 40, 'F');
-  pdf.setDrawColor(...balanceBorderColor);
-  pdf.rect(balanceCardX, currentY, contentWidth / 3 - 5, 40, 'S');
-  
-  pdf.setTextColor(...balanceTextColor);
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text('Saldo do Período', balanceCardX + 5, currentY + 10);
-  
-  pdf.setFontSize(14);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text(formatCurrency(data.balance), balanceCardX + 5, currentY + 25);
+  currentY += 80;
 
-  currentY += 60;
+  // Categories Section
+  addSectionHeader(margin, currentY, 'ANÁLISE POR CATEGORIA', 'Distribuição de receitas e despesas');
+  currentY += 35;
 
-  // Transactions by Category Table
-  currentY = checkPageBreak(currentY, 100);
-  
-  pdf.setTextColor(0, 0, 0);
-  pdf.setFontSize(16);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Transações por Categoria', margin, currentY);
-  currentY += 15;
-
-  // Table header
-  const tableStartY = currentY;
-  const colWidths = [contentWidth * 0.4, contentWidth * 0.2, contentWidth * 0.2, contentWidth * 0.2];
-  const colPositions = [
-    margin,
-    margin + colWidths[0],
-    margin + colWidths[0] + colWidths[1],
-    margin + colWidths[0] + colWidths[1] + colWidths[2]
-  ];
-
-  pdf.setFillColor(243, 244, 246); // gray-100
-  pdf.rect(margin, currentY, contentWidth, 12, 'F');
-  
-  pdf.setTextColor(0, 0, 0);
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Categoria', colPositions[0] + 2, currentY + 8);
-  pdf.text('Receitas', colPositions[1] + 2, currentY + 8);
-  pdf.text('Despesas', colPositions[2] + 2, currentY + 8);
-  pdf.text('Saldo', colPositions[3] + 2, currentY + 8);
-
-  currentY += 12;
-
-  // Table rows
-  pdf.setFont('helvetica', 'normal');
-  data.transactionsByCategory.forEach((category, index) => {
-    currentY = checkPageBreak(currentY, 12);
-    
+  // Modern table with cards
+  data.transactionsByCategory.slice(0, 8).forEach((category, index) => {
     const balance = category.income - category.expense;
-    const rowColor = index % 2 === 0 ? [255, 255, 255] : [249, 250, 251]; // white or gray-50
+    const cardY = currentY + (index * 35);
     
-    pdf.setFillColor(...rowColor);
-    pdf.rect(margin, currentY, contentWidth, 12, 'F');
+    // Category card
+    pdf.setFillColor(...colors.white);
+    pdf.roundedRect(margin, cardY, contentWidth, 30, 4, 4, 'F');
     
-    pdf.setTextColor(0, 0, 0);
-    pdf.text(category.name, colPositions[0] + 2, currentY + 8);
+    // Category color indicator
+    const hexColor = category.color;
+    const r = parseInt(hexColor.slice(1, 3), 16);
+    const g = parseInt(hexColor.slice(3, 5), 16);
+    const b = parseInt(hexColor.slice(5, 7), 16);
+    pdf.setFillColor(r, g, b);
+    pdf.roundedRect(margin + 5, cardY + 5, 4, 20, 2, 2, 'F');
     
-    pdf.setTextColor(...successColor);
-    pdf.text(formatCurrency(category.income), colPositions[1] + 2, currentY + 8);
-    
-    pdf.setTextColor(...dangerColor);
-    pdf.text(formatCurrency(category.expense), colPositions[2] + 2, currentY + 8);
-    
-    pdf.setTextColor(...(balance >= 0 ? successColor : dangerColor));
-    pdf.text(formatCurrency(balance), colPositions[3] + 2, currentY + 8);
-    
-    currentY += 12;
-  });
-
-  // Add border to table
-  pdf.setDrawColor(209, 213, 219); // gray-300
-  pdf.setLineWidth(0.1);
-  pdf.rect(margin, tableStartY, contentWidth, currentY - tableStartY, 'S');
-  
-  // Vertical lines
-  colPositions.slice(1).forEach(pos => {
-    pdf.line(pos, tableStartY, pos, currentY);
-  });
-
-  currentY += 20;
-
-  // Top Expense Categories
-  if (data.topExpenseCategories.length > 0) {
-    currentY = checkPageBreak(currentY, 80);
-    
-    pdf.setTextColor(0, 0, 0);
-    pdf.setFontSize(16);
+    // Category name
+    pdf.setTextColor(...colors.dark);
+    pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Principais Categorias de Despesa', margin, currentY);
-    currentY += 15;
+    pdf.text(category.name, margin + 15, cardY + 12);
+    
+    // Income
+    pdf.setTextColor(...colors.success);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Receitas:', margin + 15, cardY + 20);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(formatCurrency(category.income), margin + 45, cardY + 20);
+    
+    // Expense
+    pdf.setTextColor(...colors.danger);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Despesas:', margin + 100, cardY + 20);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(formatCurrency(category.expense), margin + 130, cardY + 20);
+    
+    // Balance
+    pdf.setTextColor(balance >= 0 ? ...colors.success : ...colors.danger);
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    const balanceText = formatCurrency(balance);
+    const balanceWidth = pdf.getTextWidth(balanceText);
+    pdf.text(balanceText, pageWidth - margin - balanceWidth - 5, cardY + 16);
+  });
 
-    data.topExpenseCategories.forEach((category, index) => {
-      currentY = checkPageBreak(currentY, 20);
+  currentY += (Math.min(data.transactionsByCategory.length, 8) * 35) + 20;
+
+  // Top Categories Section
+  if (data.topExpenseCategories.length > 0) {
+    addSectionHeader(margin, currentY, 'TOP CATEGORIAS DE DESPESA', 'Maiores gastos do período');
+    currentY += 35;
+
+    data.topExpenseCategories.slice(0, 5).forEach((category, index) => {
+      const cardY = currentY + (index * 40);
       
-      // Category item
-      pdf.setFillColor(249, 250, 251); // gray-50
-      pdf.rect(margin, currentY, contentWidth, 18, 'F');
-      pdf.setDrawColor(229, 231, 235); // gray-200
-      pdf.rect(margin, currentY, contentWidth, 18, 'S');
+      // Ranking card
+      pdf.setFillColor(248, 250, 252);
+      pdf.roundedRect(margin, cardY, contentWidth, 35, 6, 6, 'F');
       
-      // Rank circle
-      pdf.setFillColor(59, 130, 246); // blue-500
-      pdf.circle(margin + 10, currentY + 9, 6, 'F');
-      pdf.setTextColor(255, 255, 255);
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text((index + 1).toString(), margin + 7, currentY + 12);
-      
-      // Category name
-      pdf.setTextColor(0, 0, 0);
+      // Ranking number
+      pdf.setFillColor(...colors.primary);
+      pdf.circle(margin + 20, cardY + 17.5, 12, 'F');
+      pdf.setTextColor(...colors.white);
       pdf.setFontSize(12);
       pdf.setFont('helvetica', 'bold');
-      pdf.text(category.name, margin + 25, currentY + 8);
+      pdf.text((index + 1).toString(), margin + 17, cardY + 21);
       
-      // Amount and percentage
-      pdf.setTextColor(...grayColor);
-      pdf.setFontSize(10);
+      // Category info
+      pdf.setTextColor(...colors.dark);
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(category.name, margin + 40, cardY + 15);
+      
+      pdf.setTextColor(107, 114, 128);
+      pdf.setFontSize(9);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(`${category.percentage.toFixed(1)}% do total`, margin + 25, currentY + 15);
+      pdf.text(`${category.percentage.toFixed(1)}% do total de despesas`, margin + 40, cardY + 25);
       
       // Amount
-      pdf.setTextColor(...dangerColor);
-      pdf.setFontSize(12);
+      pdf.setTextColor(...colors.danger);
+      pdf.setFontSize(14);
       pdf.setFont('helvetica', 'bold');
       const amountText = formatCurrency(category.amount);
       const amountWidth = pdf.getTextWidth(amountText);
-      pdf.text(amountText, pageWidth - margin - amountWidth - 5, currentY + 12);
-      
-      currentY += 25;
+      pdf.text(amountText, pageWidth - margin - amountWidth - 10, cardY + 20);
     });
   }
 
-  // Footer
-  const footerY = pageHeight - 20;
-  pdf.setFillColor(243, 244, 246); // gray-100
-  pdf.rect(0, footerY - 10, pageWidth, 30, 'F');
+  // Modern Footer
+  const footerY = pageHeight - 25;
+  addGradientBackground(0, footerY, pageWidth, 25, colors.light, colors.white);
   
-  pdf.setTextColor(...grayColor);
+  pdf.setTextColor(107, 114, 128);
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('Sistema de Gerenciamento Financeiro', margin, footerY);
-  pdf.text(`Página ${pdf.internal.getCurrentPageInfo().pageNumber}`, pageWidth - margin - 20, footerY);
+  pdf.text('Sistema de Gerenciamento Financeiro', margin, footerY + 15);
+  pdf.text(`Página 1`, pageWidth - margin - 20, footerY + 15);
 
-  // Save the PDF
-  const fileName = `relatorio-financeiro-resumo-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`;
+  // Save with modern filename
+  const fileName = `relatorio-financeiro-moderno-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`;
   pdf.save(fileName);
 };
 
@@ -289,16 +322,9 @@ export const generateDetailedPDFReport = async (
   const pdf = new jsPDF('p', 'mm', 'a4');
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const margin = 20;
+  const margin = 15;
   const contentWidth = pageWidth - (margin * 2);
   
-  // Colors
-  const primaryColor = [37, 99, 235]; // blue-600
-  const successColor = [5, 150, 105]; // emerald-600
-  const dangerColor = [220, 38, 38]; // red-600
-  const grayColor = [107, 114, 128]; // gray-500
-
-  // Helper function to format currency
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -306,84 +332,132 @@ export const generateDetailedPDFReport = async (
     }).format(value);
   };
 
-  // Helper function to add a new page if needed
+  const addGradientBackground = (x: number, y: number, width: number, height: number, color1: number[], color2: number[]) => {
+    const steps = 15;
+    for (let i = 0; i < steps; i++) {
+      const ratio = i / steps;
+      const r = Math.round(color1[0] + (color2[0] - color1[0]) * ratio);
+      const g = Math.round(color1[1] + (color2[1] - color1[1]) * ratio);
+      const b = Math.round(color1[2] + (color2[2] - color1[2]) * ratio);
+      
+      pdf.setFillColor(r, g, b);
+      pdf.rect(x, y + (height * ratio), width, height / steps, 'F');
+    }
+  };
+
+  const addTransactionCard = (x: number, y: number, transaction: Transaction, isEven: boolean) => {
+    const cardHeight = 25;
+    const typeColor = transaction.type === 'income' ? colors.success : colors.danger;
+    
+    // Card background
+    pdf.setFillColor(isEven ? 255 : 248, isEven ? 255 : 250, isEven ? 255 : 252);
+    pdf.roundedRect(x, y, contentWidth, cardHeight, 4, 4, 'F');
+    
+    // Type indicator
+    pdf.setFillColor(...typeColor);
+    pdf.roundedRect(x + 5, y + 5, 3, 15, 1.5, 1.5, 'F');
+    
+    // Transaction icon
+    pdf.setFillColor(typeColor[0], typeColor[1], typeColor[2], 0.1);
+    pdf.circle(x + 20, y + 12.5, 8, 'F');
+    pdf.setTextColor(...typeColor);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(transaction.type === 'income' ? '↗' : '↘', x + 17, y + 15);
+    
+    // Description
+    pdf.setTextColor(...colors.dark);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(transaction.description, x + 35, y + 10);
+    
+    // Category and account
+    pdf.setTextColor(107, 114, 128);
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`${transaction.category} • ${transaction.account}`, x + 35, y + 18);
+    
+    // Amount
+    pdf.setTextColor(...typeColor);
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    const amountText = `${transaction.type === 'income' ? '+' : '-'}${formatCurrency(transaction.amount)}`;
+    const amountWidth = pdf.getTextWidth(amountText);
+    pdf.text(amountText, pageWidth - margin - amountWidth - 5, y + 15);
+  };
+
   const checkPageBreak = (currentY: number, requiredHeight: number) => {
-    if (currentY + requiredHeight > pageHeight - margin) {
+    if (currentY + requiredHeight > pageHeight - 40) {
       pdf.addPage();
-      return margin;
+      return 30;
     }
     return currentY;
   };
 
-  let currentY = margin;
+  let currentY = 0;
 
-  // Header
-  pdf.setFillColor(...primaryColor);
-  pdf.rect(0, 0, pageWidth, 60, 'F');
+  // Ultra-modern header
+  addGradientBackground(0, 0, pageWidth, 90, colors.gradient1, colors.gradient2);
   
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFontSize(24);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Relatório Financeiro Detalhado', margin, 25);
+  // Decorative elements
+  pdf.setFillColor(255, 255, 255, 0.1);
+  pdf.circle(pageWidth - 30, 20, 25, 'F');
+  pdf.circle(pageWidth - 60, 60, 15, 'F');
   
-  pdf.setFontSize(12);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text(`Período: ${format(new Date(data.period.startDate), 'dd/MM/yyyy', { locale: ptBR })} - ${format(new Date(data.period.endDate), 'dd/MM/yyyy', { locale: ptBR })}`, margin, 35);
-  pdf.text(`Gerado em: ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })}`, margin, 45);
-  pdf.text(`Usuário: ${userEmail}`, margin, 55);
-
-  currentY = 80;
-
-  // Summary Section
-  pdf.setTextColor(0, 0, 0);
-  pdf.setFontSize(18);
+  pdf.setTextColor(...colors.white);
+  pdf.setFontSize(32);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('Resumo Executivo', margin, currentY);
-  currentY += 15;
-
-  // Summary stats in a box
-  pdf.setFillColor(248, 250, 252); // slate-50
-  pdf.rect(margin, currentY, contentWidth, 50, 'F');
-  pdf.setDrawColor(203, 213, 225); // slate-300
-  pdf.rect(margin, currentY, contentWidth, 50, 'S');
-
-  pdf.setFontSize(12);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(0, 0, 0);
+  pdf.text('RELATÓRIO', margin, 30);
+  pdf.text('DETALHADO', margin, 50);
   
-  pdf.text('Total de Receitas:', margin + 10, currentY + 15);
-  pdf.setTextColor(...successColor);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text(formatCurrency(data.totalIncome), margin + 60, currentY + 15);
-
-  pdf.setTextColor(0, 0, 0);
+  // Decorative line
+  pdf.setDrawColor(...colors.white);
+  pdf.setLineWidth(3);
+  pdf.line(margin, 60, margin + 80, 60);
+  
+  pdf.setFontSize(11);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('Total de Despesas:', margin + 10, currentY + 25);
-  pdf.setTextColor(...dangerColor);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text(formatCurrency(data.totalExpenses), margin + 60, currentY + 25);
+  pdf.text(`Período: ${format(new Date(data.period.startDate), 'dd/MM/yyyy', { locale: ptBR })} - ${format(new Date(data.period.endDate), 'dd/MM/yyyy', { locale: ptBR })}`, margin, 72);
+  pdf.text(`Gerado: ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })} | ${userEmail}`, margin, 82);
 
-  pdf.setTextColor(0, 0, 0);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text('Saldo do Período:', margin + 10, currentY + 35);
-  pdf.setTextColor(...(data.balance >= 0 ? successColor : dangerColor));
-  pdf.setFont('helvetica', 'bold');
-  pdf.text(formatCurrency(data.balance), margin + 60, currentY + 35);
+  currentY = 110;
 
-  pdf.setTextColor(0, 0, 0);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text(`Total de Transações: ${transactions.length}`, margin + 10, currentY + 45);
+  // Executive Summary Card
+  pdf.setFillColor(...colors.white);
+  pdf.roundedRect(margin, currentY, contentWidth, 50, 8, 8, 'F');
+  pdf.setDrawColor(229, 231, 235);
+  pdf.setLineWidth(0.5);
+  pdf.roundedRect(margin, currentY, contentWidth, 50, 8, 8, 'S');
+
+  // Summary content
+  pdf.setTextColor(...colors.dark);
+  pdf.setFontSize(14);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('RESUMO EXECUTIVO', margin + 15, currentY + 15);
+
+  const summaryData = [
+    { label: 'Receitas:', value: formatCurrency(data.totalIncome), color: colors.success },
+    { label: 'Despesas:', value: formatCurrency(data.totalExpenses), color: colors.danger },
+    { label: 'Saldo:', value: formatCurrency(data.balance), color: data.balance >= 0 ? colors.success : colors.danger },
+    { label: 'Transações:', value: transactions.length.toString(), color: colors.info }
+  ];
+
+  summaryData.forEach((item, index) => {
+    const x = margin + 15 + (index * (contentWidth / 4));
+    pdf.setTextColor(107, 114, 128);
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(item.label, x, currentY + 28);
+    
+    pdf.setTextColor(...item.color);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(item.value, x, currentY + 38);
+  });
 
   currentY += 70;
 
-  // Transactions Section
-  pdf.setTextColor(0, 0, 0);
-  pdf.setFontSize(18);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Detalhamento de Transações', margin, currentY);
-  currentY += 15;
-
-  // Group transactions by date
+  // Transactions by date
   const transactionsByDate = transactions.reduce((acc, transaction) => {
     const date = transaction.date;
     if (!acc[date]) {
@@ -393,7 +467,6 @@ export const generateDetailedPDFReport = async (
     return acc;
   }, {} as Record<string, Transaction[]>);
 
-  // Sort dates in descending order
   const sortedDates = Object.keys(transactionsByDate).sort((a, b) => 
     new Date(b).getTime() - new Date(a).getTime()
   );
@@ -401,129 +474,54 @@ export const generateDetailedPDFReport = async (
   sortedDates.forEach(date => {
     const dayTransactions = transactionsByDate[date];
     
-    // Check if we need a new page
-    const requiredHeight = (dayTransactions.length * 25) + 40;
-    currentY = checkPageBreak(currentY, requiredHeight);
+    currentY = checkPageBreak(currentY, 80);
     
-    // Date header
-    pdf.setFillColor(59, 130, 246); // blue-500
-    pdf.rect(margin, currentY, contentWidth, 15, 'F');
+    // Date header card
+    addGradientBackground(margin, currentY, contentWidth, 30, colors.info, colors.primary);
     
-    pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(12);
+    pdf.setTextColor(...colors.white);
+    pdf.setFontSize(14);
     pdf.setFont('helvetica', 'bold');
     const formattedDate = format(new Date(date), 'dd/MM/yyyy - EEEE', { locale: ptBR });
-    pdf.text(formattedDate, margin + 5, currentY + 10);
+    pdf.text(formattedDate, margin + 15, currentY + 12);
     
-    // Daily totals
+    // Daily summary
     const dayIncome = dayTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
     const dayExpense = dayTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-    const dayBalance = dayIncome - dayExpense;
     
-    pdf.setFontSize(10);
-    const dailySummary = `Receitas: ${formatCurrency(dayIncome)} | Despesas: ${formatCurrency(dayExpense)} | Saldo: ${formatCurrency(dayBalance)}`;
-    const summaryWidth = pdf.getTextWidth(dailySummary);
-    pdf.text(dailySummary, pageWidth - margin - summaryWidth - 5, currentY + 10);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    const summary = `${dayTransactions.length} transações • ${formatCurrency(dayIncome - dayExpense)}`;
+    const summaryWidth = pdf.getTextWidth(summary);
+    pdf.text(summary, pageWidth - margin - summaryWidth - 15, currentY + 20);
     
-    currentY += 15;
+    currentY += 35;
     
-    // Transactions for this date
+    // Transaction cards
     dayTransactions.forEach((transaction, index) => {
-      const typeColor = transaction.type === 'income' ? successColor : dangerColor;
-      const typeSymbol = transaction.type === 'income' ? '+' : '-';
-      
-      // Alternate row colors
-      const rowColor = index % 2 === 0 ? [255, 255, 255] : [249, 250, 251]; // white or gray-50
-      pdf.setFillColor(...rowColor);
-      pdf.rect(margin, currentY, contentWidth, 25, 'F');
-      
-      // Transaction details
-      pdf.setTextColor(0, 0, 0);
-      pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(transaction.description, margin + 5, currentY + 8);
-      
-      pdf.setFontSize(9);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(...grayColor);
-      pdf.text(`${transaction.category} • ${transaction.account}`, margin + 5, currentY + 16);
-      
-      // Amount
-      pdf.setTextColor(...typeColor);
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'bold');
-      const amountText = `${typeSymbol}${formatCurrency(transaction.amount)}`;
-      const amountWidth = pdf.getTextWidth(amountText);
-      pdf.text(amountText, pageWidth - margin - amountWidth - 5, currentY + 12);
-      
-      // Type indicator
-      pdf.setFontSize(8);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(transaction.type === 'income' ? 'RECEITA' : 'DESPESA', pageWidth - margin - amountWidth - 5, currentY + 20);
-      
-      currentY += 25;
+      currentY = checkPageBreak(currentY, 30);
+      addTransactionCard(margin, currentY, transaction, index % 2 === 0);
+      currentY += 30;
     });
     
     currentY += 10;
   });
 
-  // Add summary page if there are many transactions
-  if (transactions.length > 20) {
-    pdf.addPage();
-    currentY = margin;
-    
-    // Summary statistics
-    pdf.setTextColor(0, 0, 0);
-    pdf.setFontSize(18);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Estatísticas do Período', margin, currentY);
-    currentY += 20;
-    
-    // Category breakdown
-    if (data.transactionsByCategory.length > 0) {
-      pdf.setFontSize(14);
-      pdf.text('Resumo por Categoria', margin, currentY);
-      currentY += 15;
-      
-      data.transactionsByCategory.forEach((category, index) => {
-        currentY = checkPageBreak(currentY, 15);
-        
-        const balance = category.income - category.expense;
-        
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(0, 0, 0);
-        pdf.text(`${index + 1}. ${category.name}`, margin + 5, currentY + 5);
-        
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(...grayColor);
-        pdf.text(`Receitas: ${formatCurrency(category.income)} | Despesas: ${formatCurrency(category.expense)}`, margin + 10, currentY + 12);
-        
-        pdf.setTextColor(...(balance >= 0 ? successColor : dangerColor));
-        pdf.text(`Saldo: ${formatCurrency(balance)}`, margin + 10, currentY + 19);
-        
-        currentY += 25;
-      });
-    }
-  }
-
-  // Footer on all pages
+  // Modern footer on all pages
   const totalPages = pdf.internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     pdf.setPage(i);
-    const footerY = pageHeight - 15;
+    const footerY = pageHeight - 20;
     
-    pdf.setFillColor(243, 244, 246); // gray-100
-    pdf.rect(0, footerY - 5, pageWidth, 20, 'F');
+    addGradientBackground(0, footerY, pageWidth, 20, colors.light, colors.white);
     
-    pdf.setTextColor(...grayColor);
+    pdf.setTextColor(107, 114, 128);
     pdf.setFontSize(8);
     pdf.setFont('helvetica', 'normal');
-    pdf.text('Sistema de Gerenciamento Financeiro - Relatório Detalhado', margin, footerY);
-    pdf.text(`Página ${i} de ${totalPages}`, pageWidth - margin - 30, footerY);
+    pdf.text('Sistema de Gerenciamento Financeiro - Relatório Detalhado', margin, footerY + 12);
+    pdf.text(`${i} / ${totalPages}`, pageWidth - margin - 20, footerY + 12);
   }
 
-  // Save the PDF
-  const fileName = `relatorio-financeiro-detalhado-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`;
+  const fileName = `relatorio-detalhado-moderno-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`;
   pdf.save(fileName);
 };
