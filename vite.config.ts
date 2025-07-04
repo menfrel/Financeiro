@@ -7,6 +7,17 @@ export default defineConfig({
   plugins: [react(), tempo()],
   optimizeDeps: {
     exclude: ["lucide-react"],
+    include: ["react-hook-form"],
+  },
+  build: {
+    sourcemap: false,
+    rollupOptions: {
+      external: [],
+      output: {
+        manualChunks: undefined,
+        sourcemap: false,
+      },
+    },
   },
   server: {
     // @ts-ignore

@@ -35,7 +35,10 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { generatePDFReport, generateDetailedPDFReport } from "../utils/pdfGenerator";
+import {
+  generatePDFReport,
+  generateDetailedPDFReport,
+} from "../utils/pdfGenerator";
 
 interface ReportData {
   totalIncome: number;
@@ -70,7 +73,7 @@ interface Transaction {
   id: string;
   description: string;
   amount: number;
-  type: 'income' | 'expense';
+  type: "income" | "expense";
   date: string;
   category: string;
   account: string;
@@ -158,29 +161,12 @@ export function Reports() {
         return;
       }
 
-      // Load transactions with joins
+      console.log("Loading report data with filters:", filters);
+
+      // Load transactions, categories, and accounts separately to avoid JOIN issues
       let transactionsQuery = supabase
         .from("transactions")
-        .select(`
-          id,
-          amount,
-          type,
-          description,
-          date,
-          user_id,
-          account_id,
-          category_id,
-          categories (
-            id,
-            name,
-            color,
-            type
-          ),
-          accounts (
-            id,
-            name
-          )
-        `)
+        .select("*")
         .eq("user_id", user.id)
         .gte("date", filters.startDate)
         .lte("date", filters.endDate)
@@ -188,14 +174,30 @@ export function Reports() {
 
       // Apply additional filters
       if (filters.accountId) {
-        transactionsQuery = transactionsQuery.eq("account_id", filters.accountId);
+        transactionsQuery = transactionsQuery.eq(
+          "account_id",
+          filters.accountId,
+        );
       }
 
       if (filters.categoryId) {
-        transactionsQuery = transactionsQuery.eq("category_id", filters.categoryId);
+        transactionsQuery = transactionsQuery.eq(
+          "category_id",
+          filters.categoryId,
+        );
       }
 
-      const { data: transactionsData, error: transactionsError } = await transactionsQuery;
+      const [transactionsResult, categoriesResult, accountsResult] =
+        await Promise.all([
+          transactionsQuery,
+          supabase.from("categories").select("*").eq("user_id", user.id),
+          supabase.from("accounts").select("*").eq("user_id", user.id),
+        ]);
+
+      const { data: transactionsData, error: transactionsError } =
+        transactionsResult;
+      const { data: categoriesData } = categoriesResult;
+      const { data: accountsData } = accountsResult;
 
       if (transactionsError) {
         console.error("Erro ao carregar transações:", transactionsError);
@@ -203,7 +205,23 @@ export function Reports() {
         return;
       }
 
+      console.log(
+        "Raw transactions data:",
+        transactionsData?.length || 0,
+        "transactions",
+      );
+      console.log("Date range:", filters.startDate, "to", filters.endDate);
+
+      // Create lookup maps for categories and accounts
+      const categoriesMap = new Map(
+        (categoriesData || []).map((cat) => [cat.id, cat]),
+      );
+      const accountsMap = new Map(
+        (accountsData || []).map((acc) => [acc.id, acc]),
+      );
+
       if (!transactionsData || transactionsData.length === 0) {
+        console.log("No transactions found for the selected period");
         setReportData({
           totalIncome: 0,
           totalExpenses: 0,
@@ -218,46 +236,83 @@ export function Reports() {
         return;
       }
 
-      // Validate and process transactions
-      const validTransactions = transactionsData.map(t => {
+      // Validate and process transactions with proper data mapping
+      const validTransactions = transactionsData.map((t) => {
         const amount = parseFloat(String(t.amount)) || 0;
+        const category = categoriesMap.get(t.category_id);
+        const account = accountsMap.get(t.account_id);
+
         return {
           ...t,
-          amount: amount
+          amount: amount,
+          categories: category,
+          accounts: account,
         };
       });
 
+      console.log("Processed transactions:", validTransactions.length);
+      console.log(
+        "Income transactions:",
+        validTransactions.filter((t) => t.type === "income").length,
+      );
+      console.log(
+        "Expense transactions:",
+        validTransactions.filter((t) => t.type === "expense").length,
+      );
+
       // Separate by type
-      const incomeTransactions = validTransactions.filter(t => t.type === "income");
-      const expenseTransactions = validTransactions.filter(t => t.type === "expense");
+      const incomeTransactions = validTransactions.filter(
+        (t) => t.type === "income",
+      );
+      const expenseTransactions = validTransactions.filter(
+        (t) => t.type === "expense",
+      );
 
       // Calculate totals
-      const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
-      const totalExpenses = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
+      const totalIncome = incomeTransactions.reduce((sum, t) => {
+        console.log("Income transaction:", t.description, t.amount);
+        return sum + t.amount;
+      }, 0);
+      const totalExpenses = expenseTransactions.reduce(
+        (sum, t) => sum + t.amount,
+        0,
+      );
       const balance = totalIncome - totalExpenses;
 
+      console.log(
+        "Calculated totals - Income:",
+        totalIncome,
+        "Expenses:",
+        totalExpenses,
+        "Balance:",
+        balance,
+      );
+
       // Group by category
-      const categoryGroups = validTransactions.reduce((acc: any, transaction: any) => {
-        const categoryName = transaction.categories?.name || "Sem categoria";
-        const categoryColor = transaction.categories?.color || "#6B7280";
+      const categoryGroups = validTransactions.reduce(
+        (acc: any, transaction: any) => {
+          const categoryName = transaction.categories?.name || "Sem categoria";
+          const categoryColor = transaction.categories?.color || "#6B7280";
 
-        if (!acc[categoryName]) {
-          acc[categoryName] = {
-            name: categoryName,
-            income: 0,
-            expense: 0,
-            color: categoryColor,
-          };
-        }
+          if (!acc[categoryName]) {
+            acc[categoryName] = {
+              name: categoryName,
+              income: 0,
+              expense: 0,
+              color: categoryColor,
+            };
+          }
 
-        if (transaction.type === "income") {
-          acc[categoryName].income += transaction.amount;
-        } else {
-          acc[categoryName].expense += transaction.amount;
-        }
+          if (transaction.type === "income") {
+            acc[categoryName].income += transaction.amount;
+          } else {
+            acc[categoryName].expense += transaction.amount;
+          }
 
-        return acc;
-      }, {});
+          return acc;
+        },
+        {},
+      );
 
       const transactionsByCategory = Object.values(categoryGroups);
 
@@ -268,9 +323,10 @@ export function Reports() {
         const monthStart = format(startOfMonth(month), "yyyy-MM-dd");
         const monthEnd = format(endOfMonth(month), "yyyy-MM-dd");
 
-        // Filter transactions for the month
+        // Filter transactions for the month with proper date comparison
         const monthTransactions = validTransactions.filter((t) => {
-          return t.date >= monthStart && t.date <= monthEnd;
+          const transactionDate = t.date;
+          return transactionDate >= monthStart && transactionDate <= monthEnd;
         });
 
         const monthIncome = monthTransactions
@@ -280,6 +336,10 @@ export function Reports() {
         const monthExpense = monthTransactions
           .filter((t) => t.type === "expense")
           .reduce((sum, t) => sum + t.amount, 0);
+
+        console.log(
+          `Month ${format(month, "MMM", { locale: ptBR })}: ${monthTransactions.length} transactions, Income: ${monthIncome}, Expense: ${monthExpense}`,
+        );
 
         monthlyTrend.push({
           month: format(month, "MMM", { locale: ptBR }),
@@ -322,15 +382,17 @@ export function Reports() {
         }));
 
       // Format transactions for PDF export
-      const formattedTransactions: Transaction[] = validTransactions.map(t => ({
-        id: t.id,
-        description: t.description,
-        amount: t.amount,
-        type: t.type as 'income' | 'expense',
-        date: t.date,
-        category: t.categories?.name || "Sem categoria",
-        account: t.accounts?.name || "Sem conta",
-      }));
+      const formattedTransactions: Transaction[] = validTransactions.map(
+        (t) => ({
+          id: t.id,
+          description: t.description,
+          amount: t.amount,
+          type: t.type as "income" | "expense",
+          date: t.date,
+          category: t.categories?.name || "Sem categoria",
+          account: t.accounts?.name || "Sem conta",
+        }),
+      );
 
       setReportData({
         totalIncome,
@@ -381,7 +443,7 @@ export function Reports() {
   const exportToPDF = async (detailed: boolean = false) => {
     try {
       setExportingPDF(true);
-      
+
       const pdfData = {
         ...reportData,
         period: {
@@ -391,9 +453,13 @@ export function Reports() {
       };
 
       if (detailed) {
-        await generateDetailedPDFReport(pdfData, user?.email || '', transactions);
+        await generateDetailedPDFReport(
+          pdfData,
+          user?.email || "",
+          transactions,
+        );
       } else {
-        await generatePDFReport(pdfData, user?.email || '');
+        await generatePDFReport(pdfData, user?.email || "");
       }
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);

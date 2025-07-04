@@ -1,12 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
-import {
-  Plus,
-  ArrowUpRight,
-  Filter,
-  Search,
-} from "lucide-react";
+import { Plus, ArrowUpRight, Filter, Search } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format, parse } from "date-fns";
 import { TransactionCard } from "./TransactionCard";
@@ -43,7 +38,8 @@ export function Transactions() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [isDetailed, setIsDetailed] = useState(false);
@@ -151,14 +147,17 @@ export function Transactions() {
       const validatedTransactions = (transactionsData || []).map(
         (transaction) => ({
           ...transaction,
-          amount: parseFloat(transaction.amount) || 0,
+          amount: parseFloat(String(transaction.amount)) || 0,
         }),
       );
 
       const validatedAccounts = (accountsData || []).map((account) => ({
         ...account,
         initial_balance: parseFloat(account.initial_balance) || 0,
-        current_balance: parseFloat(account.current_balance) || parseFloat(account.initial_balance) || 0,
+        current_balance:
+          parseFloat(account.current_balance) ||
+          parseFloat(account.initial_balance) ||
+          0,
       }));
 
       setTransactions(validatedTransactions);
@@ -189,7 +188,9 @@ export function Transactions() {
         account_id: data.account_id,
         category_id: data.category_id,
         is_recurring: data.is_recurring,
-        recurring_frequency: data.is_recurring ? data.recurring_frequency : null,
+        recurring_frequency: data.is_recurring
+          ? data.recurring_frequency
+          : null,
         recurring_until: data.is_recurring ? data.recurring_until : null,
       };
 
@@ -276,14 +277,19 @@ export function Transactions() {
 
   const filteredTransactions = transactions.filter((transaction) => {
     // Search filter
-    if (searchTerm && !transaction.description.toLowerCase().includes(searchTerm.toLowerCase())) {
+    if (
+      searchTerm &&
+      !transaction.description.toLowerCase().includes(searchTerm.toLowerCase())
+    ) {
       return false;
     }
-    
+
     // Other filters
     if (filter.type && transaction.type !== filter.type) return false;
-    if (filter.account && transaction.account?.id !== filter.account) return false;
-    if (filter.category && transaction.category?.id !== filter.category) return false;
+    if (filter.account && transaction.account?.id !== filter.account)
+      return false;
+    if (filter.category && transaction.category?.id !== filter.category)
+      return false;
     if (filter.startDate && transaction.date < filter.startDate) return false;
     if (filter.endDate && transaction.date > filter.endDate) return false;
     return true;
@@ -323,12 +329,9 @@ export function Transactions() {
             Registre suas receitas e despesas
           </p>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-          <LayoutToggle 
-            isDetailed={isDetailed} 
-            onToggle={setIsDetailed}
-          />
+          <LayoutToggle isDetailed={isDetailed} onToggle={setIsDetailed} />
           <button
             onClick={openModal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
@@ -427,7 +430,9 @@ export function Transactions() {
       </div>
 
       {/* Transactions List */}
-      <div className={`${isDetailed ? 'space-y-6' : 'grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4'}`}>
+      <div
+        className={`${isDetailed ? "space-y-6" : "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4"}`}
+      >
         {filteredTransactions.length === 0 ? (
           <div className="col-span-full text-center py-12">
             <ArrowUpRight className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -435,10 +440,9 @@ export function Transactions() {
               Nenhum lançamento encontrado
             </h3>
             <p className="text-gray-600 mb-6">
-              {searchTerm || Object.values(filter).some(v => v) 
-                ? "Tente ajustar os filtros de busca" 
-                : "Registre seu primeiro lançamento para começar"
-              }
+              {searchTerm || Object.values(filter).some((v) => v)
+                ? "Tente ajustar os filtros de busca"
+                : "Registre seu primeiro lançamento para começar"}
             </p>
             <button
               onClick={openModal}
