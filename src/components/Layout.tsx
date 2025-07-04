@@ -10,7 +10,9 @@ import {
   Settings, 
   LogOut,
   Menu,
-  X
+  X,
+  ArrowRightLeft,
+  Wallet
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -21,8 +23,10 @@ interface LayoutProps {
 
 const navigation = [
   { name: 'Dashboard', icon: LayoutDashboard, key: 'dashboard' },
-  { name: 'Contas', icon: CreditCard, key: 'accounts' },
+  { name: 'Contas', icon: Wallet, key: 'accounts' },
   { name: 'Lançamentos', icon: ArrowUpDown, key: 'transactions' },
+  { name: 'Transferências', icon: ArrowRightLeft, key: 'transfers' },
+  { name: 'Cartões', icon: CreditCard, key: 'credit-cards' },
   { name: 'Categorias', icon: PieChart, key: 'categories' },
   { name: 'Orçamentos', icon: Target, key: 'budgets' },
   { name: 'Relatórios', icon: FileText, key: 'reports' },

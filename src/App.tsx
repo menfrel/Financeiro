@@ -7,6 +7,8 @@ import { Layout } from "./components/Layout";
 import { Dashboard } from "./components/Dashboard";
 import { Accounts } from "./components/Accounts";
 import { Transactions } from "./components/Transactions";
+import { Transfers } from "./components/Transfers";
+import { CreditCards } from "./components/CreditCards";
 import { Categories } from "./components/Categories";
 import { Budgets } from "./components/Budgets";
 import { Reports } from "./components/Reports";
@@ -36,6 +38,10 @@ function App() {
         return <Accounts />;
       case "transactions":
         return <Transactions />;
+      case "transfers":
+        return <Transfers />;
+      case "credit-cards":
+        return <CreditCards />;
       case "categories":
         return <Categories />;
       case "budgets":
