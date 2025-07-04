@@ -248,7 +248,7 @@ export const generatePDFReport = async (data: ReportData, userEmail: string) => 
     pdf.text(formatCurrency(category.expense), margin + 130, cardY + 20);
     
     // Balance
-    pdf.setTextColor(balance >= 0 ? ...colors.success : ...colors.danger);
+    pdf.setTextColor(...(balance >= 0 ? colors.success : colors.danger));
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
     const balanceText = formatCurrency(balance);
