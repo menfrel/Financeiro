@@ -350,7 +350,7 @@ export const generatePDFReport = async (data: ReportData, userEmail: string) => 
     pdf.setTextColor(...colors.danger);
     pdf.text(formatCurrency(category.expense), margin + 140, tableRowY + 10);
     
-    pdf.setTextColor(balance >= 0 ? ...colors.success : ...colors.danger);
+    pdf.setTextColor(...(balance >= 0 ? colors.success : colors.danger));
     pdf.text(formatCurrency(balance), margin + 180, tableRowY + 10);
     
     tableRowY += 15;
