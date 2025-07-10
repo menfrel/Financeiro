@@ -582,32 +582,6 @@ export function Dashboard() {
                 ))}
               </>
             ) : (
-              <>
-                {data.accounts.map((account, index) => (
-                <div
-                  key={`account-${index}`}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <Wallet className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {account.name}
-                      </p>
-                      <p className="text-sm text-gray-500 capitalize">
-                        {account.type.replace("_", " ")}
-                      </p>
-                    </div>
-                  </div>
-                  <p className="font-semibold text-gray-900">
-                    {formatCurrency(account.balance)}
-                  </p>
-                </div>
-                ))}
-              </>
-            )) : (
               <div className="text-center text-gray-500 py-8">
                 Nenhuma conta ou cartão encontrado
               </div>
