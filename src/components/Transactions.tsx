@@ -27,6 +27,8 @@ interface TransactionForm {
   date: string;
   account_id: string;
   category_id: string;
+  payment_method: "account" | "credit_card";
+  credit_card_id?: string;
   is_recurring: boolean;
   recurring_frequency?: "weekly" | "monthly";
   recurring_until?: string;
@@ -37,6 +39,7 @@ export function Transactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [creditCards, setCreditCards] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
@@ -62,6 +65,7 @@ export function Transactions() {
   } = useForm<TransactionForm>();
   const watchType = watch("type");
   const watchIsRecurring = watch("is_recurring");
+  const watchPaymentMethod = watch("payment_method");
 
   useEffect(() => {
     if (user) {
@@ -144,6 +148,13 @@ export function Transactions() {
         .order("type", { ascending: true })
         .order("name", { ascending: true });
 
+      // Load credit cards
+      const { data: creditCardsData } = await supabase
+        .from("credit_cards")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("name", { ascending: true });
+
       const validatedTransactions = (transactionsData || []).map(
         (transaction) => ({
           ...transaction,
@@ -163,6 +174,7 @@ export function Transactions() {
       setTransactions(validatedTransactions);
       setAccounts(validatedAccounts);
       setCategories(categoriesData || []);
+      setCreditCards(creditCardsData || []);
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -185,7 +197,7 @@ export function Transactions() {
         type: data.type,
         description: data.description,
         date: data.date,
-        account_id: data.account_id,
+        account_id: data.payment_method === "account" ? data.account_id : null,
         category_id: data.category_id,
         is_recurring: data.is_recurring,
         recurring_frequency: data.is_recurring
@@ -194,25 +206,56 @@ export function Transactions() {
         recurring_until: data.is_recurring ? data.recurring_until : null,
       };
 
-      if (editingTransaction) {
+      if (data.payment_method === "credit_card" && data.credit_card_id) {
+        // Create credit card transaction
         const { error } = await supabase
-          .from("transactions")
-          .update(transactionData)
-          .eq("id", editingTransaction.id)
-          .eq("user_id", user.id);
+          .from("credit_card_transactions")
+          .insert({
+            user_id: user.id,
+            credit_card_id: data.credit_card_id,
+            amount: data.amount,
+            description: data.description,
+            date: data.date,
+            installments: 1,
+            current_installment: 1,
+          });
 
         if (error) throw error;
+
+        // Update credit card balance
+        const card = creditCards.find(c => c.id === data.credit_card_id);
+        if (card) {
+          await supabase
+            .from("credit_cards")
+            .update({
+              current_balance: card.current_balance + data.amount,
+            })
+            .eq("id", data.credit_card_id);
+        }
       } else {
-        const { error } = await supabase
-          .from("transactions")
-          .insert(transactionData);
+        // Regular account transaction
+        if (editingTransaction) {
+          const { error } = await supabase
+            .from("transactions")
+            .update(transactionData)
+            .eq("id", editingTransaction.id)
+            .eq("user_id", user.id);
 
-        if (error) throw error;
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from("transactions")
+            .insert(transactionData);
+
+          if (error) throw error;
+        }
+
+        if (data.account_id) {
+          await recalculateAccountBalances(
+            [data.account_id, editingTransaction?.account?.id].filter(Boolean),
+          );
+        }
       }
-
-      await recalculateAccountBalances(
-        [data.account_id, editingTransaction?.account?.id].filter(Boolean),
-      );
 
       await loadData();
       setIsModalOpen(false);
@@ -233,6 +276,7 @@ export function Transactions() {
     setValue("date", transaction.date);
     setValue("account_id", transaction.account?.id || "");
     setValue("category_id", transaction.category?.id || "");
+    setValue("payment_method", "account");
     setValue("is_recurring", transaction.is_recurring);
     if (transaction.recurring_frequency) {
       setValue("recurring_frequency", transaction.recurring_frequency);
@@ -272,6 +316,7 @@ export function Transactions() {
     setEditingTransaction(null);
     reset();
     setValue("date", format(new Date(), "yyyy-MM-dd"));
+    setValue("payment_method", "account");
     setIsModalOpen(true);
   };
 
@@ -296,8 +341,21 @@ export function Transactions() {
   });
 
   const availableCategories = categories.filter(
-    (cat) => !watchType || cat.type === watchType,
+    (cat) => {
+      // For credit card transactions, only show expense categories
+      if (watchPaymentMethod === "credit_card") {
+        return cat.type === "expense";
+      }
+      return !watchType || cat.type === watchType;
+    },
   );
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
+  };
 
   if (loading) {
     return (
@@ -553,27 +611,76 @@ export function Transactions() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Conta
+                  Forma de Pagamento
                 </label>
                 <select
-                  {...register("account_id", {
-                    required: "Conta é obrigatória",
+                  {...register("payment_method", {
+                    required: "Forma de pagamento é obrigatória",
                   })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">Selecione a conta</option>
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
+                  <option value="">Selecione a forma de pagamento</option>
+                  <option value="account">Conta Bancária</option>
+                  <option value="credit_card">Cartão de Crédito</option>
                 </select>
-                {errors.account_id && (
+                {errors.payment_method && (
                   <p className="text-red-600 text-sm mt-1">
-                    {errors.account_id.message}
+                    {errors.payment_method.message}
                   </p>
                 )}
               </div>
+
+              {watchPaymentMethod === "account" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Conta
+                  </label>
+                  <select
+                    {...register("account_id", {
+                      required: watchPaymentMethod === "account" ? "Conta é obrigatória" : false,
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione a conta</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.account_id && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {errors.account_id.message}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {watchPaymentMethod === "credit_card" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Cartão de Crédito
+                  </label>
+                  <select
+                    {...register("credit_card_id", {
+                      required: watchPaymentMethod === "credit_card" ? "Cartão é obrigatório" : false,
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione o cartão</option>
+                    {creditCards.map((card) => (
+                      <option key={card.id} value={card.id}>
+                        {card.name} - Disponível: {formatCurrency(card.limit_amount - card.current_balance)}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.credit_card_id && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {errors.credit_card_id.message}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
