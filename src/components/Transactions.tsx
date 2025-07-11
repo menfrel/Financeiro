@@ -525,7 +525,7 @@ export function Transactions() {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 my-8">
+          <div className="bg-white rounded-xl max-w-lg w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">
               {editingTransaction ? "Editar Lançamento" : "Novo Lançamento"}
             </h2>
