@@ -1,130 +1,151 @@
-import React, { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
-import { useAuth } from '../hooks/useAuth'
-import { User, Mail, Lock, Bell, Database, Download, Upload, Trash2, Save } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import React, { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../hooks/useAuth";
+import {
+  User,
+  Mail,
+  Lock,
+  Bell,
+  Database,
+  Download,
+  Upload,
+  Trash2,
+  Save,
+} from "lucide-react";
+import { useForm } from "react-hook-form";
 
 interface UserProfile {
-  id: string
-  email: string
-  full_name: string | null
-  avatar_url: string | null
+  id: string;
+  email: string;
+  full_name: string | null;
+  avatar_url: string | null;
 }
 
 interface ProfileForm {
-  full_name: string
-  email: string
+  full_name: string;
+  email: string;
 }
 
 interface PasswordForm {
-  currentPassword: string
-  newPassword: string
-  confirmPassword: string
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
 }
 
 export function Settings() {
-  const { user, signOut } = useAuth()
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState('profile')
+  const { user, signOut } = useAuth();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("profile");
 
-  const { register: registerProfile, handleSubmit: handleProfileSubmit, reset: resetProfile, formState: { errors: profileErrors } } = useForm<ProfileForm>()
-  const { register: registerPassword, handleSubmit: handlePasswordSubmit, reset: resetPassword, watch, formState: { errors: passwordErrors } } = useForm<PasswordForm>()
+  const {
+    register: registerProfile,
+    handleSubmit: handleProfileSubmit,
+    reset: resetProfile,
+    formState: { errors: profileErrors },
+  } = useForm<ProfileForm>();
+  const {
+    register: registerPassword,
+    handleSubmit: handlePasswordSubmit,
+    reset: resetPassword,
+    watch,
+    formState: { errors: passwordErrors },
+  } = useForm<PasswordForm>();
 
-  const watchNewPassword = watch('newPassword')
+  const watchNewPassword = watch("newPassword");
 
   useEffect(() => {
     if (user) {
-      loadProfile()
+      loadProfile();
     }
-  }, [user])
+  }, [user]);
 
   const loadProfile = async () => {
     try {
-      setLoading(true)
+      setLoading(true);
       const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user!.id)
-        .single()
+        .from("users")
+        .select("*")
+        .eq("id", user!.id)
+        .single();
 
-      if (error) throw error
+      if (error) throw error;
 
-      setProfile(data)
+      setProfile(data);
       resetProfile({
-        full_name: data.full_name || '',
-        email: data.email
-      })
+        full_name: data.full_name || "",
+        email: data.email,
+      });
     } catch (error) {
-      console.error('Error loading profile:', error)
+      console.error("Error loading profile:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const onProfileSubmit = async (data: ProfileForm) => {
     try {
-      setSaving(true)
-      
+      setSaving(true);
+
       const { error } = await supabase
-        .from('users')
+        .from("users")
         .update({
           full_name: data.full_name,
           email: data.email,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', user!.id)
+        .eq("id", user!.id);
 
-      if (error) throw error
+      if (error) throw error;
 
       // Update auth email if changed
       if (data.email !== profile?.email) {
         const { error: authError } = await supabase.auth.updateUser({
-          email: data.email
-        })
-        if (authError) throw authError
+          email: data.email,
+        });
+        if (authError) throw authError;
       }
 
-      await loadProfile()
-      alert('Perfil atualizado com sucesso!')
+      await loadProfile();
+      alert("Perfil atualizado com sucesso!");
     } catch (error) {
-      console.error('Error updating profile:', error)
-      alert('Erro ao atualizar perfil')
+      console.error("Error updating profile:", error);
+      alert("Erro ao atualizar perfil");
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const onPasswordSubmit = async (data: PasswordForm) => {
     try {
-      setSaving(true)
-      
+      setSaving(true);
+
       const { error } = await supabase.auth.updateUser({
-        password: data.newPassword
-      })
+        password: data.newPassword,
+      });
 
-      if (error) throw error
+      if (error) throw error;
 
-      resetPassword()
-      alert('Senha alterada com sucesso!')
+      resetPassword();
+      alert("Senha alterada com sucesso!");
     } catch (error) {
-      console.error('Error updating password:', error)
-      alert('Erro ao alterar senha')
+      console.error("Error updating password:", error);
+      alert("Erro ao alterar senha");
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const exportData = async () => {
     try {
       // Get all user data
       const [accounts, categories, transactions, budgets] = await Promise.all([
-        supabase.from('accounts').select('*').eq('user_id', user!.id),
-        supabase.from('categories').select('*').eq('user_id', user!.id),
-        supabase.from('transactions').select('*').eq('user_id', user!.id),
-        supabase.from('budgets').select('*').eq('user_id', user!.id)
-      ])
+        supabase.from("accounts").select("*").eq("user_id", user!.id),
+        supabase.from("categories").select("*").eq("user_id", user!.id),
+        supabase.from("transactions").select("*").eq("user_id", user!.id),
+        supabase.from("budgets").select("*").eq("user_id", user!.id),
+      ]);
 
       const exportData = {
         profile: profile,
@@ -132,55 +153,60 @@ export function Settings() {
         categories: categories.data,
         transactions: transactions.data,
         budgets: budgets.data,
-        exportDate: new Date().toISOString()
-      }
+        exportDate: new Date().toISOString(),
+      };
 
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `backup-financeiro-${new Date().toISOString().split('T')[0]}.json`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `backup-financeiro-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error exporting data:', error)
-      alert('Erro ao exportar dados')
+      console.error("Error exporting data:", error);
+      alert("Erro ao exportar dados");
     }
-  }
+  };
 
   const deleteAccount = async () => {
-    const confirmation = prompt('Para confirmar a exclusão da conta, digite "EXCLUIR" (em maiúsculas):')
-    
-    if (confirmation !== 'EXCLUIR') {
-      alert('Confirmação incorreta. Conta não foi excluída.')
-      return
+    const confirmation = prompt(
+      'Para confirmar a exclusão da conta, digite "EXCLUIR" (em maiúsculas):',
+    );
+
+    if (confirmation !== "EXCLUIR") {
+      alert("Confirmação incorreta. Conta não foi excluída.");
+      return;
     }
 
     try {
       // Delete user data (cascade will handle related records)
       const { error } = await supabase
-        .from('users')
+        .from("users")
         .delete()
-        .eq('id', user!.id)
+        .eq("id", user!.id);
 
-      if (error) throw error
+      if (error) throw error;
 
       // Sign out user
-      await signOut()
-      alert('Conta excluída com sucesso')
+      await signOut();
+      alert("Conta excluída com sucesso");
     } catch (error) {
-      console.error('Error deleting account:', error)
-      alert('Erro ao excluir conta')
+      console.error("Error deleting account:", error);
+      alert("Erro ao excluir conta");
     }
-  }
+  };
 
   const tabs = [
-    { id: 'profile', name: 'Perfil', icon: User },
-    { id: 'security', name: 'Segurança', icon: Lock },
-    { id: 'data', name: 'Dados', icon: Database },
-  ]
+    { id: "profile", name: "Perfil", icon: User },
+    { id: "security", name: "Segurança", icon: Lock },
+    { id: "integrations", name: "Integrações", icon: Bell },
+    { id: "data", name: "Dados", icon: Database },
+  ];
 
   if (loading) {
     return (
@@ -197,7 +223,7 @@ export function Settings() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -212,38 +238,43 @@ export function Settings() {
         <div className="lg:w-64">
           <nav className="space-y-1">
             {tabs.map((tab) => {
-              const Icon = tab.icon
+              const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                     activeTab === tab.id
-                      ? 'bg-blue-100 text-blue-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      ? "bg-blue-100 text-blue-900"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   }`}
                 >
                   <Icon className="mr-3 h-5 w-5" />
                   {tab.name}
                 </button>
-              )
+              );
             })}
           </nav>
         </div>
 
         {/* Content */}
         <div className="flex-1">
-          {activeTab === 'profile' && (
+          {activeTab === "profile" && (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">Informações do Perfil</h2>
-              
-              <form onSubmit={handleProfileSubmit(onProfileSubmit)} className="space-y-4">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">
+                Informações do Perfil
+              </h2>
+
+              <form
+                onSubmit={handleProfileSubmit(onProfileSubmit)}
+                className="space-y-4"
+              >
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Nome Completo
                   </label>
                   <input
-                    {...registerProfile('full_name')}
+                    {...registerProfile("full_name")}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Seu nome completo"
                   />
@@ -254,19 +285,21 @@ export function Settings() {
                     Email
                   </label>
                   <input
-                    {...registerProfile('email', { 
-                      required: 'Email é obrigatório',
+                    {...registerProfile("email", {
+                      required: "Email é obrigatório",
                       pattern: {
                         value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                        message: 'Email inválido'
-                      }
+                        message: "Email inválido",
+                      },
                     })}
                     type="email"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="seu@email.com"
                   />
                   {profileErrors.email && (
-                    <p className="text-red-600 text-sm mt-1">{profileErrors.email.message}</p>
+                    <p className="text-red-600 text-sm mt-1">
+                      {profileErrors.email.message}
+                    </p>
                   )}
                 </div>
 
@@ -277,33 +310,43 @@ export function Settings() {
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors disabled:opacity-50"
                   >
                     <Save className="w-4 h-4" />
-                    <span>{saving ? 'Salvando...' : 'Salvar Alterações'}</span>
+                    <span>{saving ? "Salvando..." : "Salvar Alterações"}</span>
                   </button>
                 </div>
               </form>
             </div>
           )}
 
-          {activeTab === 'security' && (
+          {activeTab === "security" && (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">Segurança</h2>
-              
-              <form onSubmit={handlePasswordSubmit(onPasswordSubmit)} className="space-y-4">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">
+                Segurança
+              </h2>
+
+              <form
+                onSubmit={handlePasswordSubmit(onPasswordSubmit)}
+                className="space-y-4"
+              >
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Nova Senha
                   </label>
                   <input
-                    {...registerPassword('newPassword', { 
-                      required: 'Nova senha é obrigatória',
-                      minLength: { value: 6, message: 'Senha deve ter pelo menos 6 caracteres' }
+                    {...registerPassword("newPassword", {
+                      required: "Nova senha é obrigatória",
+                      minLength: {
+                        value: 6,
+                        message: "Senha deve ter pelo menos 6 caracteres",
+                      },
                     })}
                     type="password"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="••••••••"
                   />
                   {passwordErrors.newPassword && (
-                    <p className="text-red-600 text-sm mt-1">{passwordErrors.newPassword.message}</p>
+                    <p className="text-red-600 text-sm mt-1">
+                      {passwordErrors.newPassword.message}
+                    </p>
                   )}
                 </div>
 
@@ -312,16 +355,19 @@ export function Settings() {
                     Confirmar Nova Senha
                   </label>
                   <input
-                    {...registerPassword('confirmPassword', { 
-                      required: 'Confirmação de senha é obrigatória',
-                      validate: value => value === watchNewPassword || 'Senhas não coincidem'
+                    {...registerPassword("confirmPassword", {
+                      required: "Confirmação de senha é obrigatória",
+                      validate: (value) =>
+                        value === watchNewPassword || "Senhas não coincidem",
                     })}
                     type="password"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="••••••••"
                   />
                   {passwordErrors.confirmPassword && (
-                    <p className="text-red-600 text-sm mt-1">{passwordErrors.confirmPassword.message}</p>
+                    <p className="text-red-600 text-sm mt-1">
+                      {passwordErrors.confirmPassword.message}
+                    </p>
                   )}
                 </div>
 
@@ -332,20 +378,119 @@ export function Settings() {
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors disabled:opacity-50"
                   >
                     <Lock className="w-4 h-4" />
-                    <span>{saving ? 'Alterando...' : 'Alterar Senha'}</span>
+                    <span>{saving ? "Alterando..." : "Alterar Senha"}</span>
                   </button>
                 </div>
               </form>
             </div>
           )}
 
-          {activeTab === 'data' && (
+          {activeTab === "integrations" && (
+            <div className="space-y-6">
+              {/* Google Calendar Integration */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <Bell className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Google Calendar
+                    </h2>
+                    <p className="text-gray-600 text-sm">
+                      Sincronize suas sessões com o Google Calendar
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h3 className="font-medium text-blue-900 mb-2">
+                      Como configurar:
+                    </h3>
+                    <ol className="text-blue-800 text-sm space-y-1 list-decimal list-inside">
+                      <li>Acesse o Google Cloud Console</li>
+                      <li>Crie um novo projeto ou selecione um existente</li>
+                      <li>Ative a Google Calendar API</li>
+                      <li>Configure as credenciais OAuth 2.0</li>
+                      <li>Adicione as variáveis de ambiente no projeto</li>
+                    </ol>
+                  </div>
+
+                  <div className="bg-amber-50 p-4 rounded-lg">
+                    <p className="text-amber-800 text-sm">
+                      <strong>Variáveis necessárias:</strong>
+                      <br />
+                      • GOOGLE_CLIENT_ID
+                      <br />
+                      • GOOGLE_CLIENT_SECRET
+                      <br />• GOOGLE_REDIRECT_URI
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      window.open("https://console.cloud.google.com/", "_blank")
+                    }
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+                  >
+                    <span>Abrir Google Cloud Console</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Other Integrations */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                  Outras Integrações
+                </h2>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                    <div>
+                      <h3 className="font-medium text-gray-900">
+                        WhatsApp Business
+                      </h3>
+                      <p className="text-gray-600 text-sm">
+                        Envie lembretes automáticos por WhatsApp
+                      </p>
+                    </div>
+                    <span className="text-gray-400 text-sm">Em breve</span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                    <div>
+                      <h3 className="font-medium text-gray-900">Zoom</h3>
+                      <p className="text-gray-600 text-sm">
+                        Crie salas automáticas para sessões online
+                      </p>
+                    </div>
+                    <span className="text-gray-400 text-sm">Em breve</span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                    <div>
+                      <h3 className="font-medium text-gray-900">Stripe</h3>
+                      <p className="text-gray-600 text-sm">
+                        Processe pagamentos online automaticamente
+                      </p>
+                    </div>
+                    <span className="text-gray-400 text-sm">Em breve</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "data" && (
             <div className="space-y-6">
               {/* Export Data */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Exportar Dados</h2>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                  Exportar Dados
+                </h2>
                 <p className="text-gray-600 mb-4">
-                  Faça o download de todos os seus dados financeiros em formato JSON.
+                  Faça o download de todos os seus dados financeiros em formato
+                  JSON.
                 </p>
                 <button
                   onClick={exportData}
@@ -358,9 +503,12 @@ export function Settings() {
 
               {/* Delete Account */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-red-200">
-                <h2 className="text-xl font-semibold text-red-900 mb-4">Zona de Perigo</h2>
+                <h2 className="text-xl font-semibold text-red-900 mb-4">
+                  Zona de Perigo
+                </h2>
                 <p className="text-gray-600 mb-4">
-                  A exclusão da conta é permanente e não pode ser desfeita. Todos os seus dados serão perdidos.
+                  A exclusão da conta é permanente e não pode ser desfeita.
+                  Todos os seus dados serão perdidos.
                 </p>
                 <button
                   onClick={deleteAccount}
@@ -375,5 +523,5 @@ export function Settings() {
         </div>
       </div>
     </div>
-  )
+  );
 }

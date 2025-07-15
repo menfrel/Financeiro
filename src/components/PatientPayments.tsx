@@ -90,22 +90,30 @@ export function PatientPayments() {
       }
 
       // Carregar pacientes
-      const { data: patientsData } = await supabase
+      const { data: patientsData, error: patientsError } = await supabase
         .from("patients")
         .select("*")
         .eq("user_id", user.id)
         .eq("status", "active")
         .order("name", { ascending: true });
 
+      if (patientsError) {
+        console.error("Error loading patients:", patientsError);
+      }
+
       // Carregar sessões
-      const { data: sessionsData } = await supabase
+      const { data: sessionsData, error: sessionsError } = await supabase
         .from("sessions")
         .select("*")
         .eq("user_id", user.id)
         .order("session_date", { ascending: false });
 
+      if (sessionsError) {
+        console.error("Error loading sessions:", sessionsError);
+      }
+
       // Carregar pagamentos com dados do paciente e sessão
-      const { data: paymentsData } = await supabase
+      const { data: paymentsData, error: paymentsError } = await supabase
         .from("patient_payments")
         .select(
           `
@@ -117,20 +125,34 @@ export function PatientPayments() {
         .eq("user_id", user.id)
         .order("payment_date", { ascending: false });
 
+      if (paymentsError) {
+        console.error("Error loading payments:", paymentsError);
+      }
+
       // Carregar contas
-      const { data: accountsData } = await supabase
+      const { data: accountsData, error: accountsError } = await supabase
         .from("accounts")
         .select("*")
         .eq("user_id", user.id)
         .order("name", { ascending: true });
 
+      if (accountsError) {
+        console.error("Error loading accounts:", accountsError);
+      } else {
+        console.log("Accounts loaded:", accountsData);
+      }
+
       // Carregar categorias de receita
-      const { data: categoriesData } = await supabase
+      const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
         .select("*")
         .eq("user_id", user.id)
         .eq("type", "income")
         .order("name", { ascending: true });
+
+      if (categoriesError) {
+        console.error("Error loading categories:", categoriesError);
+      }
 
       setPatients(patientsData || []);
       setSessions(sessionsData || []);
@@ -849,15 +871,25 @@ export function PatientPayments() {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">Selecione a conta</option>
-                          {accounts.map((account) => (
-                            <option key={account.id} value={account.id}>
-                              {account.name}
-                            </option>
-                          ))}
+                          {accounts.length === 0 ? (
+                            <option disabled>Nenhuma conta encontrada</option>
+                          ) : (
+                            accounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.name} ({account.type})
+                              </option>
+                            ))
+                          )}
                         </select>
                         {errors.account_id && (
                           <p className="text-red-600 text-sm mt-1">
                             {errors.account_id.message}
+                          </p>
+                        )}
+                        {accounts.length === 0 && (
+                          <p className="text-amber-600 text-sm mt-1">
+                            ⚠️ Nenhuma conta encontrada. Cadastre uma conta
+                            primeiro na seção "Contas".
                           </p>
                         )}
                         <p className="text-sm text-gray-500 mt-1">

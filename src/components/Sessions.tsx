@@ -17,11 +17,14 @@ import {
   XCircle,
   AlertCircle,
   UserX,
+  Settings,
+  ExternalLink,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format, parse, addMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Session, SessionForm, Patient } from "../types/patients";
+import { googleCalendarService } from "../lib/googleCalendar";
 
 export function Sessions() {
   const { user } = useAuth();
@@ -36,6 +39,9 @@ export function Sessions() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [patientFilter, setPatientFilter] = useState<string>("");
+  const [isCalendarConfigOpen, setIsCalendarConfigOpen] = useState(false);
+  const [calendarIntegrationEnabled, setCalendarIntegrationEnabled] =
+    useState(false);
 
   const {
     register,
@@ -52,8 +58,15 @@ export function Sessions() {
   useEffect(() => {
     if (user) {
       loadData();
+      checkCalendarIntegration();
     }
   }, [user]);
+
+  const checkCalendarIntegration = () => {
+    // Check if Google Calendar is configured
+    const isConfigured = googleCalendarService.isConfigured();
+    setCalendarIntegrationEnabled(isConfigured);
+  };
 
   const loadData = async () => {
     try {
@@ -131,6 +144,30 @@ export function Sessions() {
       }
 
       await loadData();
+
+      // Sync with Google Calendar if enabled
+      if (calendarIntegrationEnabled && !editingSession) {
+        try {
+          const patient = patients.find((p) => p.id === data.patient_id);
+          if (patient) {
+            const calendarEvent = googleCalendarService.sessionToCalendarEvent({
+              patient_name: patient.name,
+              session_date: data.session_date,
+              duration_minutes: data.duration_minutes,
+              session_type: data.session_type,
+              notes: data.notes,
+              patient_email: patient.email,
+            });
+
+            await googleCalendarService.createEvent(calendarEvent);
+            console.log("Sessão sincronizada com Google Calendar");
+          }
+        } catch (error) {
+          console.error("Erro ao sincronizar com Google Calendar:", error);
+          // Don't block the session creation if calendar sync fails
+        }
+      }
+
       setIsModalOpen(false);
       setEditingSession(null);
       reset();
@@ -312,17 +349,43 @@ export function Sessions() {
           </p>
         </div>
 
-        <button
-          onClick={openModal}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nova Sessão</span>
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setIsCalendarConfigOpen(true)}
+            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+            title="Configurar Google Calendar"
+          >
+            <Settings className="w-4 h-4" />
+            <span className="hidden sm:inline">Calendar</span>
+          </button>
+          <button
+            onClick={openModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nova Sessão</span>
+          </button>
+        </div>
       </div>
 
-      {/* Filtros */}
+      {/* Status da Integração e Filtros */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
+        {calendarIntegrationEnabled && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-green-800 font-medium">
+                Google Calendar integrado
+              </span>
+              <ExternalLink className="w-4 h-4 text-green-600" />
+            </div>
+            <p className="text-green-700 text-sm mt-1">
+              Novas sessões serão automaticamente sincronizadas com seu
+              calendário.
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -882,6 +945,109 @@ export function Sessions() {
               <button
                 onClick={() => setIsViewModalOpen(false)}
                 className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Configuração Google Calendar */}
+      {isCalendarConfigOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Integração Google Calendar
+              </h2>
+              <button
+                onClick={() => setIsCalendarConfigOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-center">
+                <Calendar className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Conectar com Google Calendar
+                </h3>
+                <p className="text-gray-600 text-sm mb-6">
+                  Sincronize automaticamente suas sessões com o Google Calendar.
+                  Você e seus pacientes receberão lembretes automáticos.
+                </p>
+              </div>
+
+              {!calendarIntegrationEnabled ? (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-blue-900 mb-2">
+                      Benefícios:
+                    </h4>
+                    <ul className="text-blue-800 text-sm space-y-1">
+                      <li>• Sincronização automática de sessões</li>
+                      <li>• Lembretes por email para você e pacientes</li>
+                      <li>• Visualização no seu calendário pessoal</li>
+                      <li>• Evita conflitos de horários</li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-amber-50 p-4 rounded-lg">
+                    <p className="text-amber-800 text-sm">
+                      <strong>Nota:</strong> Para configurar a integração com
+                      Google Calendar, você precisa configurar as credenciais
+                      OAuth2 do Google nas configurações do projeto.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      alert(
+                        "Para configurar a integração com Google Calendar, você precisa:\n\n1. Criar um projeto no Google Cloud Console\n2. Ativar a Calendar API\n3. Configurar OAuth2\n4. Adicionar as credenciais nas variáveis de ambiente\n\nConsulte a documentação para mais detalhes.",
+                      );
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <ExternalLink className="w-5 h-5" />
+                    <span>Configurar Integração</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <span className="font-medium text-green-900">
+                        Integração Ativa
+                      </span>
+                    </div>
+                    <p className="text-green-800 text-sm">
+                      Suas sessões estão sendo sincronizadas automaticamente com
+                      o Google Calendar.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      // Disconnect Google Calendar
+                      setCalendarIntegrationEnabled(false);
+                      alert("Integração com Google Calendar desconectada.");
+                    }}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg transition-colors"
+                  >
+                    Desconectar
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <button
+                onClick={() => setIsCalendarConfigOpen(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 Fechar
               </button>
