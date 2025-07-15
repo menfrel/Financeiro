@@ -87,28 +87,47 @@ export function Sessions() {
         .order("name", { ascending: true });
 
       // Carregar sessões com dados do paciente
+      // Primeiro carregar as sessões
       const { data: sessionsData, error: sessionsError } = await supabase
         .from("sessions")
-        .select(
-          `
-          *,
-          patients (id, name, email, phone)
-        `,
-        )
+        .select("*")
         .eq("user_id", user.id)
         .order("session_date", { ascending: false });
 
       if (sessionsError) {
         console.error("Error loading sessions:", sessionsError);
+        setSessions([]);
+      } else {
+        console.log("Raw sessions data:", sessionsData);
+        
+        // Depois carregar os dados dos pacientes e fazer o merge manual
+        if (sessionsData && sessionsData.length > 0) {
+          const patientIds = [...new Set(sessionsData.map(s => s.patient_id))];
+          const { data: patientsForSessions } = await supabase
+            .from("patients")
+            .select("id, name, email, phone")
+            .in("id", patientIds);
+
+          // Fazer merge manual dos dados
+          const sessionsWithPatients = sessionsData.map(session => ({
+            ...session,
+            patient: patientsForSessions?.find(p => p.id === session.patient_id) || null
+          }));
+
+          console.log("Sessions with patients:", sessionsWithPatients);
+          setSessions(sessionsWithPatients);
+        } else {
+          setSessions([]);
+        }
       }
 
-      console.log("Sessions loaded:", sessionsData?.length || 0);
       console.log("Patients loaded:", patientsData?.length || 0);
 
       setPatients(patientsData || []);
-      setSessions(sessionsData || []);
     } catch (error) {
       console.error("Error loading data:", error);
+      setSessions([]);
+      setPatients([]);
     } finally {
       setLoading(false);
     }
@@ -314,7 +333,7 @@ export function Sessions() {
 
   const filteredSessions = sessions.filter((session) => {
     const matchesSearch =
-      session.patient?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (session.patient?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (session.notes &&
         session.notes.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (session.objectives &&
@@ -473,7 +492,7 @@ export function Sessions() {
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
                         <h3 className="font-semibold text-gray-900">
-                          {session.patient?.name}
+                          {session.patient?.name || 'Paciente não encontrado'}
                         </h3>
                         <span
                           className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(session.status)}`}

@@ -113,20 +113,51 @@ export function PatientPayments() {
       }
 
       // Carregar pagamentos com dados do paciente e sessão
+      // Primeiro carregar os pagamentos
       const { data: paymentsData, error: paymentsError } = await supabase
         .from("patient_payments")
-        .select(
-          `
-          *,
-          patients (id, name, email, phone),
-          sessions (id, session_date, session_type)
-        `,
-        )
+        .select("*")
         .eq("user_id", user.id)
         .order("payment_date", { ascending: false });
 
       if (paymentsError) {
         console.error("Error loading payments:", paymentsError);
+        setPayments([]);
+      } else {
+        console.log("Raw payments data:", paymentsData);
+        
+        // Depois carregar os dados relacionados e fazer merge manual
+        if (paymentsData && paymentsData.length > 0) {
+          const patientIds = [...new Set(paymentsData.map(p => p.patient_id))];
+          const sessionIds = [...new Set(paymentsData.map(p => p.session_id).filter(Boolean))];
+          
+          const [patientsForPayments, sessionsForPayments] = await Promise.all([
+            supabase
+              .from("patients")
+              .select("id, name, email, phone")
+              .in("id", patientIds),
+            sessionIds.length > 0 
+              ? supabase
+                  .from("sessions")
+                  .select("id, session_date, session_type")
+                  .in("id", sessionIds)
+              : Promise.resolve({ data: [] })
+          ]);
+
+          // Fazer merge manual dos dados
+          const paymentsWithRelations = paymentsData.map(payment => ({
+            ...payment,
+            patient: patientsForPayments.data?.find(p => p.id === payment.patient_id) || null,
+            session: payment.session_id 
+              ? sessionsForPayments.data?.find(s => s.id === payment.session_id) || null 
+              : null
+          }));
+
+          console.log("Payments with relations:", paymentsWithRelations);
+          setPayments(paymentsWithRelations);
+        } else {
+          setPayments([]);
+        }
       }
 
       console.log("Payments loaded:", paymentsData?.length || 0);
@@ -152,16 +183,18 @@ export function PatientPayments() {
         .order("name", { ascending: true });
 
       if (categoriesError) {
-        console.error("Error loading categories:", categoriesError);
       }
 
       setPatients(patientsData || []);
-      setSessions(sessionsData || []);
-      setPayments(paymentsData || []);
       setAccounts(accountsData || []);
       setCategories(categoriesData || []);
     } catch (error) {
       console.error("Error loading data:", error);
+      setPayments([]);
+      setPatients([]);
+      setSessions([]);
+      setAccounts([]);
+      setCategories([]);
     } finally {
       setLoading(false);
     }
@@ -418,7 +451,7 @@ export function PatientPayments() {
 
   const filteredPayments = payments.filter((payment) => {
     const matchesSearch =
-      payment.patient?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (payment.patient?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (payment.description &&
         payment.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = !statusFilter || payment.status === statusFilter;
@@ -553,7 +586,7 @@ export function PatientPayments() {
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
                         <h3 className="font-semibold text-gray-900">
-                          {payment.patient?.name}
+                          {payment.patient?.name || 'Paciente não encontrado'}
                         </h3>
                         <span
                           className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(payment.status)}`}
