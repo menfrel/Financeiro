@@ -87,16 +87,23 @@ export function Sessions() {
         .order("name", { ascending: true });
 
       // Carregar sessões com dados do paciente
-      const { data: sessionsData } = await supabase
+      const { data: sessionsData, error: sessionsError } = await supabase
         .from("sessions")
         .select(
           `
           *,
-          patients!inner (id, name, email, phone)
+          patients (id, name, email, phone)
         `,
         )
         .eq("user_id", user.id)
         .order("session_date", { ascending: false });
+
+      if (sessionsError) {
+        console.error("Error loading sessions:", sessionsError);
+      }
+
+      console.log("Sessions loaded:", sessionsData?.length || 0);
+      console.log("Patients loaded:", patientsData?.length || 0);
 
       setPatients(patientsData || []);
       setSessions(sessionsData || []);

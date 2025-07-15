@@ -489,7 +489,7 @@ export function Settings() {
                   Exportar Dados
                 </h2>
                 <p className="text-gray-600 mb-4">
-                  Faça o download de todos os seus dados financeiros em formato
+                  Faça o download de todos os seus dados em formato
                   JSON.
                 </p>
                 <button

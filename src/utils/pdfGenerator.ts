@@ -409,8 +409,8 @@ export const generatePDFReport = async (data: ReportData, userEmail: string) => 
   pdf.setTextColor(107, 114, 128);
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('Sistema Financeiro Profissional', margin, footerY + 15);
-  pdf.text('contato@sistemafinanceiro.com.br', margin, footerY + 25);
+  pdf.text('Sistema de Gestão Profissional', margin, footerY + 15);
+  pdf.text('contato@gestao.com.br', margin, footerY + 25);
   
   // Page number
   pdf.text('Página 1', pageWidth - margin - 20, footerY + 20);
@@ -642,8 +642,8 @@ export const generateDetailedPDFReport = async (
     pdf.setTextColor(107, 114, 128);
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
-    pdf.text('Sistema Financeiro Profissional - Relatório Detalhado', margin, footerY + 15);
-    pdf.text('contato@sistemafinanceiro.com.br', margin, footerY + 25);
+    pdf.text('Sistema de Gestão Profissional - Relatório Detalhado', margin, footerY + 15);
+    pdf.text('contato@gestao.com.br', margin, footerY + 25);
     
     // Page number
     pdf.text(`Página ${i} de ${totalPages}`, pageWidth - margin - 40, footerY + 20);

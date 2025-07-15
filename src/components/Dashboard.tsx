@@ -173,6 +173,21 @@ export function Dashboard() {
         .gte("date", startDate)
         .lte("date", endDate);
 
+      // Get sessions count for dashboard
+      const { data: sessionsData } = await supabase
+        .from("sessions")
+        .select("id")
+        .eq("user_id", user!.id);
+
+      // Get patient payments for dashboard
+      const { data: paymentsData } = await supabase
+        .from("patient_payments")
+        .select("id")
+        .eq("user_id", user!.id);
+
+      console.log("Dashboard - Sessions count:", sessionsData?.length || 0);
+      console.log("Dashboard - Payments count:", paymentsData?.length || 0);
+
       // Get last 6 months data
       const monthlyData = [];
       for (let i = 5; i >= 0; i--) {

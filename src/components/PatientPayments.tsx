@@ -118,7 +118,7 @@ export function PatientPayments() {
         .select(
           `
           *,
-          patients!inner (id, name, email, phone),
+          patients (id, name, email, phone),
           sessions (id, session_date, session_type)
         `,
         )
@@ -129,6 +129,9 @@ export function PatientPayments() {
         console.error("Error loading payments:", paymentsError);
       }
 
+      console.log("Payments loaded:", paymentsData?.length || 0);
+      console.log("Patients loaded:", patientsData?.length || 0);
+
       // Carregar contas
       const { data: accountsData, error: accountsError } = await supabase
         .from("accounts")
@@ -138,8 +141,6 @@ export function PatientPayments() {
 
       if (accountsError) {
         console.error("Error loading accounts:", accountsError);
-      } else {
-        console.log("Accounts loaded:", accountsData);
       }
 
       // Carregar categorias de receita
