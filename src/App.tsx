@@ -13,6 +13,9 @@ import { Categories } from "./components/Categories";
 import { Budgets } from "./components/Budgets";
 import { Reports } from "./components/Reports";
 import { Settings } from "./components/Settings";
+import { Patients } from "./components/Patients";
+import { Sessions } from "./components/Sessions";
+import { PatientPayments } from "./components/PatientPayments";
 
 function App() {
   const { user, loading } = useAuth();
@@ -48,6 +51,12 @@ function App() {
         return <Budgets />;
       case "reports":
         return <Reports />;
+      case "patients":
+        return <Patients />;
+      case "sessions":
+        return <Sessions />;
+      case "patient-payments":
+        return <PatientPayments />;
       case "settings":
         return <Settings />;
       default:
