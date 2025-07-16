@@ -305,9 +305,92 @@ export function PatientPayments() {
 
           if (transactionError) {
             console.error("Error creating transaction:", transactionError);
+            alert("Pagamento salvo, mas houve erro ao criar lançamento financeiro");
           } else {
             // Atualizar o payment com o ID da transação
-            await supabase
+            const { data: transactionData } = await supabase
+              .from("transactions")
+              .select("id")
+              .eq("user_id", user.id)
+              .eq("description", transactionDescription)
+              .eq("amount", data.amount)
+              .eq("date", data.payment_date)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .single();
+
+            if (transactionData) {
+              await supabase
+                .from("patient_payments")
+                .update({ transaction_id: transactionData.id })
+                .eq("id", paymentId);
+            }
+          }
+        } else {
+          alert("Erro ao criar categoria de pagamentos");
+        }
+      }
+
+      await loadData();
+      setIsModalOpen(false);
+      setEditingPayment(null);
+      reset();
+    } catch (error) {
+      console.error("Error saving payment:", error);
+      alert("Erro ao salvar pagamento");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const ensurePatientPaymentCategory = async () => {
+    try {
+      console.log("Verificando categoria de pagamentos...");
+      
+      // Verificar se já existe uma categoria "Pagamentos de Pacientes"
+      const { data: existingCategory, error: searchError } = await supabase
+        .from("categories")
+        .select("*")
+        .eq("user_id", user!.id)
+        .eq("name", "Pagamentos de Pacientes")
+        .eq("type", "income")
+        .single();
+
+      if (searchError && searchError.code !== 'PGRST116') {
+        console.error("Error searching for category:", searchError);
+        return null;
+      }
+
+      if (existingCategory) {
+        console.log("Categoria encontrada:", existingCategory.id);
+        return existingCategory.id;
+      }
+
+      console.log("Criando nova categoria...");
+      // Criar a categoria se não existir
+      const { data: newCategory, error: createError } = await supabase
+        .from("categories")
+        .insert({
+          user_id: user!.id,
+          name: "Pagamentos de Pacientes",
+          type: "income",
+          color: "#10B981", // Verde
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error("Error creating category:", createError);
+        return null;
+      }
+
+      console.log("Nova categoria criada:", newCategory.id);
+      return newCategory.id;
+    } catch (error) {
+      console.error("Error ensuring patient payment category:", error);
+      return null;
+    }
+  };
               .from("patient_payments")
               .update({ transaction_id: paymentId })
               .eq("id", paymentId);
@@ -373,6 +456,12 @@ export function PatientPayments() {
     newStatus: PatientPayment["status"],
   ) => {
     try {
+      const payment = payments.find(p => p.id === paymentId);
+      if (!payment) {
+        alert("Pagamento não encontrado");
+        return;
+      }
+
       const { error } = await supabase
         .from("patient_payments")
         .update({ status: newStatus })
@@ -380,10 +469,59 @@ export function PatientPayments() {
         .eq("user_id", user!.id);
 
       if (error) throw error;
+
+      // Se mudou para "paid", criar transação automaticamente
+      if (newStatus === "paid") {
+        await createTransactionForPayment(payment);
+      }
+
       await loadData();
     } catch (error) {
       console.error("Error updating payment status:", error);
       alert("Erro ao atualizar status do pagamento");
+    }
+  };
+
+  const createTransactionForPayment = async (payment: PatientPayment) => {
+    try {
+      // Garantir que existe uma categoria "Pagamentos de Pacientes"
+      const categoryId = await ensurePatientPaymentCategory();
+      
+      if (!categoryId) {
+        console.error("Não foi possível criar/encontrar categoria de pagamentos");
+        return;
+      }
+
+      // Buscar uma conta padrão (primeira conta disponível)
+      if (accounts.length === 0) {
+        console.error("Nenhuma conta disponível para criar transação");
+        return;
+      }
+
+      const defaultAccount = accounts[0]; // Usar primeira conta como padrão
+      const patient = patients.find(p => p.id === payment.patient_id);
+      const transactionDescription = `Pagamento - ${patient?.name || "Paciente"}`;
+
+      const { error: transactionError } = await supabase
+        .from("transactions")
+        .insert({
+          user_id: user!.id,
+          account_id: defaultAccount.id,
+          category_id: categoryId,
+          amount: payment.amount,
+          type: "income",
+          description: transactionDescription,
+          date: payment.payment_date,
+          is_recurring: false,
+        });
+
+      if (transactionError) {
+        console.error("Error creating transaction:", transactionError);
+      } else {
+        console.log("Transação criada com sucesso para o pagamento");
+      }
+    } catch (error) {
+      console.error("Error in createTransactionForPayment:", error);
     }
   };
 
@@ -746,28 +884,6 @@ export function PatientPayments() {
                       {errors.patient_id.message}
                     </p>
                   )}
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Sessão (Opcional)
-                  </label>
-                  <select
-                    {...register("session_id")}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Nenhuma sessão específica</option>
-                    {patientSessions.map((session) => (
-                      <option key={session.id} value={session.id}>
-                        {format(
-                          new Date(session.session_date),
-                          "dd/MM/yyyy HH:mm",
-                          { locale: ptBR },
-                        )}{" "}
-                        - {session.session_type}
-                      </option>
-                    ))}
-                  </select>
                 </div>
 
                 <div>

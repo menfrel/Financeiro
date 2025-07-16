@@ -323,7 +323,8 @@ export function Sessions() {
 
   const calculateEndTime = (startTime: string, duration: number) => {
     try {
-      const start = new Date(startTime);
+      // Parse the datetime-local input correctly
+      const start = new Date(startTime + (startTime.includes('T') ? '' : 'T00:00:00'));
       const end = addMinutes(start, duration);
       return format(end, "HH:mm");
     } catch {
@@ -513,7 +514,7 @@ export function Sessions() {
                         <div className="flex items-center space-x-2">
                           <Clock className="w-4 h-4" />
                           <span>
-                            {format(sessionDate, "HH:mm")} - {endTime} (
+                            {format(sessionDate, "HH:mm", { locale: ptBR })} - {endTime} (
                             {session.duration_minutes}min)
                           </span>
                         </div>
@@ -841,7 +842,7 @@ export function Sessions() {
                     <span className="text-gray-700">
                       {format(
                         new Date(viewingSession.session_date),
-                        "dd/MM/yyyy 'às' HH:mm",
+                        "dd/MM/yyyy HH:mm",
                         { locale: ptBR },
                       )}
                     </span>
@@ -883,7 +884,7 @@ export function Sessions() {
                       <span className="text-gray-700">
                         {format(
                           new Date(viewingSession.next_session_date),
-                          "dd/MM/yyyy 'às' HH:mm",
+                          "dd/MM/yyyy HH:mm",
                           { locale: ptBR },
                         )}
                       </span>

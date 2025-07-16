@@ -76,7 +76,6 @@ export interface SessionForm {
 
 export interface PatientPaymentForm {
   patient_id: string;
-  session_id?: string;
   amount: number;
   payment_date: string;
   payment_method: string;
