@@ -5,7 +5,6 @@ import { Plus, ArrowUpRight, Filter, Search } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format, parse } from "date-fns";
 import { TransactionCard } from "./TransactionCard";
-import { LayoutToggle } from "./LayoutToggle";
 
 interface Transaction {
   id: string;
@@ -45,7 +44,6 @@ export function Transactions() {
     useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [isDetailed, setIsDetailed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState({
     type: "",
@@ -156,10 +154,24 @@ export function Transactions() {
         .order("name", { ascending: true });
 
       const validatedTransactions = (transactionsData || []).map(
-        (transaction) => ({
-          ...transaction,
-          amount: parseFloat(String(transaction.amount)) || 0,
-        }),
+        (transaction) => {
+          // Corrigir para garantir que category sempre seja um objeto {id, name, color}
+          let category = null;
+          if (transaction.categories) {
+            category = transaction.categories;
+          } else if (transaction.category) {
+            category = transaction.category;
+          }
+          return {
+            ...transaction,
+            amount: parseFloat(String(transaction.amount)) || 0,
+            category: category ? {
+              id: category.id,
+              name: category.name,
+              color: category.color
+            } : null,
+          };
+        },
       );
 
       const validatedAccounts = (accountsData || []).map((account) => ({
@@ -389,7 +401,6 @@ export function Transactions() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-          <LayoutToggle isDetailed={isDetailed} onToggle={setIsDetailed} />
           <button
             onClick={openModal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
@@ -489,7 +500,7 @@ export function Transactions() {
 
       {/* Transactions List */}
       <div
-        className={`${isDetailed ? "space-y-6" : "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4"}`}
+        className={"space-y-6"}
       >
         {filteredTransactions.length === 0 ? (
           <div className="col-span-full text-center py-12">
@@ -514,7 +525,7 @@ export function Transactions() {
             <TransactionCard
               key={transaction.id}
               transaction={transaction}
-              isDetailed={isDetailed}
+              isDetailed={true}
               onEdit={handleEdit}
               onDelete={handleDelete}
             />
