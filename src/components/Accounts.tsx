@@ -4,13 +4,11 @@ import { useAuth } from "../hooks/useAuth";
 import {
   Plus,
   Wallet,
-  CreditCard,
-  PiggyBank,
-  Smartphone,
-  Edit2,
-  Trash2,
+  Search,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
+import { AccountCard } from "./AccountCard";
+import { LayoutToggle } from "./LayoutToggle";
 
 interface Account {
   id: string;
@@ -28,10 +26,10 @@ interface AccountForm {
 }
 
 const accountTypes = [
-  { value: "checking", label: "Conta Corrente", icon: CreditCard },
-  { value: "savings", label: "Poupança", icon: PiggyBank },
-  { value: "investment", label: "Investimento", icon: Wallet },
-  { value: "digital_wallet", label: "Carteira Digital", icon: Smartphone },
+  { value: "checking", label: "Conta Corrente" },
+  { value: "savings", label: "Poupança" },
+  { value: "investment", label: "Investimento" },
+  { value: "digital_wallet", label: "Carteira Digital" },
 ];
 
 export function Accounts() {
@@ -41,6 +39,8 @@ export function Accounts() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [isDetailed, setIsDetailed] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const {
     register,
@@ -58,13 +58,11 @@ export function Accounts() {
 
   const recalculateAccountBalances = async () => {
     try {
-      // Verificar se o usuário está autenticado
       if (!user?.id) {
         console.error("Usuário não autenticado");
         return;
       }
 
-      // Buscar todas as contas
       const { data: accounts } = await supabase
         .from("accounts")
         .select("*")
@@ -72,7 +70,6 @@ export function Accounts() {
 
       if (!accounts) return;
 
-      // Para cada conta, calcular o saldo baseado nas transações
       for (const account of accounts) {
         const { data: transactions } = await supabase
           .from("transactions")
@@ -95,7 +92,6 @@ export function Accounts() {
 
         const calculatedBalance = initialBalance + transactionBalance;
 
-        // Atualizar apenas se o saldo calculado for diferente do atual
         if (
           Math.abs(calculatedBalance - (account.current_balance || 0)) > 0.01
         ) {
@@ -117,17 +113,14 @@ export function Accounts() {
     try {
       setLoading(true);
 
-      // Verificar se o usuário está autenticado
       if (!user?.id) {
         console.error("Usuário não autenticado");
         setLoading(false);
         return;
       }
 
-      // Primeiro, recalcular os saldos
       await recalculateAccountBalances();
 
-      // Depois, carregar os dados atualizados
       const { data, error } = await supabase
         .from("accounts")
         .select("*")
@@ -135,7 +128,7 @@ export function Accounts() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      // Garantir que os valores numéricos sejam válidos
+      
       const validatedAccounts = (data || []).map((account) => ({
         ...account,
         initial_balance:
@@ -160,7 +153,6 @@ export function Accounts() {
       setSubmitting(true);
 
       if (editingAccount) {
-        // Calcular a diferença no saldo inicial e ajustar o saldo atual
         const balanceDifference =
           data.initial_balance - editingAccount.initial_balance;
         const newCurrentBalance =
@@ -231,19 +223,10 @@ export function Accounts() {
     setIsModalOpen(true);
   };
 
-  const formatCurrency = (value: number | null | undefined) => {
-    // Garantir que o valor seja um número válido
-    const numericValue = typeof value === "number" && !isNaN(value) ? value : 0;
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(numericValue);
-  };
-
-  const getAccountIcon = (type: string) => {
-    const accountType = accountTypes.find((t) => t.value === type);
-    return accountType?.icon || Wallet;
-  };
+  const filteredAccounts = accounts.filter((account) =>
+    account.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    accountTypes.find(t => t.value === account.type)?.label.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (loading) {
     return (
@@ -268,30 +251,54 @@ export function Accounts() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-8 space-y-4 lg:space-y-0">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Contas</h1>
           <p className="text-gray-600 mt-2">
             Gerencie suas contas bancárias e carteiras
           </p>
         </div>
-        <button
-          onClick={openModal}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nova Conta</span>
-        </button>
+        
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+          <LayoutToggle 
+            isDetailed={isDetailed} 
+            onToggle={setIsDetailed}
+          />
+          <button
+            onClick={openModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nova Conta</span>
+          </button>
+        </div>
       </div>
 
-      {accounts.length === 0 ? (
+      {/* Search Bar */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar contas..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      </div>
+
+      {filteredAccounts.length === 0 ? (
         <div className="text-center py-12">
           <Wallet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            Nenhuma conta encontrada
+            {searchTerm ? "Nenhuma conta encontrada" : "Nenhuma conta encontrada"}
           </h3>
           <p className="text-gray-600 mb-6">
-            Crie sua primeira conta para começar a gerenciar suas finanças
+            {searchTerm 
+              ? "Tente ajustar o termo de busca" 
+              : "Crie sua primeira conta para começar a gerenciar suas finanças"
+            }
           </p>
           <button
             onClick={openModal}
@@ -301,64 +308,16 @@ export function Accounts() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {accounts.map((account) => {
-            const IconComponent = getAccountIcon(account.type);
-            return (
-              <div
-                key={account.id}
-                className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <IconComponent className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">
-                        {account.name}
-                      </h3>
-                      <p className="text-sm text-gray-600 capitalize">
-                        {
-                          accountTypes.find((t) => t.value === account.type)
-                            ?.label
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex space-x-1">
-                    <button
-                      onClick={() => handleEdit(account)}
-                      className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(account.id)}
-                      className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Saldo Atual</span>
-                    <span className="font-semibold text-lg text-gray-900">
-                      {formatCurrency(account.current_balance)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Saldo Inicial</span>
-                    <span className="text-sm text-gray-500">
-                      {formatCurrency(account.initial_balance)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        <div className={`${isDetailed ? 'space-y-6' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'}`}>
+          {filteredAccounts.map((account) => (
+            <AccountCard
+              key={account.id}
+              account={account}
+              isDetailed={isDetailed}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+          ))}
         </div>
       )}
 

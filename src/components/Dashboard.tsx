@@ -5,6 +5,7 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
+  CreditCard,
   Target,
   ArrowUpRight,
   ArrowDownRight,
@@ -34,6 +35,11 @@ interface DashboardData {
     name: string;
     balance: number;
     type: string;
+  }>;
+  creditCards: Array<{
+    name: string;
+    balance: number;
+    limit: number;
   }>;
   expensesByCategory: Array<{
     name: string;
@@ -72,6 +78,7 @@ export function Dashboard() {
     monthlyIncome: 0,
     monthlyExpenses: 0,
     accounts: [],
+    creditCards: [],
     expensesByCategory: [],
     monthlyTrend: [],
     recentTransactions: [],
@@ -142,6 +149,12 @@ export function Dashboard() {
         .select("*")
         .eq("user_id", user!.id);
 
+      // Get credit cards
+      const { data: creditCards } = await supabase
+        .from("credit_cards")
+        .select("*")
+        .eq("user_id", user!.id);
+
       // Get current month transactions
       const currentMonth = new Date();
       const startDate = format(startOfMonth(currentMonth), "yyyy-MM-dd");
@@ -159,6 +172,21 @@ export function Dashboard() {
         .eq("user_id", user!.id)
         .gte("date", startDate)
         .lte("date", endDate);
+
+      // Get sessions count for dashboard
+      const { data: sessionsData } = await supabase
+        .from("sessions")
+        .select("id")
+        .eq("user_id", user!.id);
+
+      // Get patient payments for dashboard
+      const { data: paymentsData } = await supabase
+        .from("patient_payments")
+        .select("id")
+        .eq("user_id", user!.id);
+
+      console.log("Dashboard - Sessions count:", sessionsData?.length || 0);
+      console.log("Dashboard - Payments count:", paymentsData?.length || 0);
 
       // Get last 6 months data
       const monthlyData = [];
@@ -249,6 +277,11 @@ export function Dashboard() {
           name: account.name,
           balance: parseFloat(account.current_balance) || 0,
           type: account.type,
+        })),
+        creditCards: (creditCards || []).map((card) => ({
+          name: card.name,
+          balance: parseFloat(card.current_balance) || 0,
+          limit: parseFloat(card.limit_amount) || 0,
         })),
         expensesByCategory,
         monthlyTrend: monthlyData,
@@ -506,36 +539,66 @@ export function Dashboard() {
         {/* Accounts Overview */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Suas Contas
+            Suas Contas e Cartões
           </h3>
           <div className="space-y-3">
-            {data.accounts.length > 0 ? (
-              data.accounts.map((account, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <Wallet className="w-4 h-4 text-blue-600" />
+            {data.accounts.length > 0 || data.creditCards.length > 0 ? (
+              <>
+                {data.accounts.map((account, index) => (
+                  <div
+                    key={`account-${index}`}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <Wallet className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {account.name}
+                        </p>
+                        <p className="text-sm text-gray-500 capitalize">
+                          {account.type.replace("_", " ")}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {account.name}
+                    <p className="font-semibold text-gray-900">
+                      {formatCurrency(account.balance)}
+                    </p>
+                  </div>
+                ))}
+                {data.creditCards.map((card, index) => (
+                  <div
+                    key={`card-${index}`}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <CreditCard className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {card.name}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Cartão de Crédito
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-red-600">
+                        {formatCurrency(card.balance)}
                       </p>
-                      <p className="text-sm text-gray-500 capitalize">
-                        {account.type.replace("_", " ")}
+                      <p className="text-xs text-gray-500">
+                        Limite: {formatCurrency(card.limit)}
                       </p>
                     </div>
                   </div>
-                  <p className="font-semibold text-gray-900">
-                    {formatCurrency(account.balance)}
-                  </p>
-                </div>
-              ))
+                ))}
+              </>
             ) : (
               <div className="text-center text-gray-500 py-8">
-                Nenhuma conta encontrada
+                Nenhuma conta ou cartão encontrado
               </div>
             )}
           </div>

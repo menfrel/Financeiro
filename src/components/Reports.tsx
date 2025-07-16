@@ -9,6 +9,8 @@ import {
   TrendingUp,
   TrendingDown,
   PieChart,
+  FileDown,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   format,
@@ -33,6 +35,8 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 interface ReportData {
   totalIncome: number;
@@ -63,6 +67,16 @@ interface ReportData {
   }>;
 }
 
+interface Transaction {
+  id: string;
+  description: string;
+  amount: number;
+  type: "income" | "expense";
+  date: string;
+  category: string;
+  account: string;
+}
+
 export function Reports() {
   const { user } = useAuth();
   const [reportData, setReportData] = useState<ReportData>({
@@ -74,7 +88,9 @@ export function Reports() {
     expensesByCategory: [],
     topExpenseCategories: [],
   });
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const [filters, setFilters] = useState({
     startDate: format(startOfMonth(subMonths(new Date(), 5)), "yyyy-MM-dd"),
     endDate: format(endOfMonth(new Date()), "yyyy-MM-dd"),
@@ -143,101 +159,67 @@ export function Reports() {
         return;
       }
 
-      console.log("=== RELATÓRIOS DEBUG DETALHADO ===");
-      console.log("User ID:", user.id);
-      console.log("Filtros aplicados:", filters);
-      console.log("Data inicial:", filters.startDate);
-      console.log("Data final:", filters.endDate);
+      console.log("Loading report data with filters:", filters);
 
-      // Primeiro, vamos buscar TODAS as transações do usuário para debug
-      const { data: allTransactions, error: allError } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false });
-
-      if (allError) {
-        console.error("Erro ao buscar todas as transações:", allError);
-      } else {
-        console.log("Total de transações do usuário:", allTransactions?.length || 0);
-        
-        // Debug das receitas
-        const allIncomes = allTransactions?.filter(t => t.type === "income") || [];
-        console.log("Total de receitas no banco:", allIncomes.length);
-        
-        if (allIncomes.length > 0) {
-          console.log("Receitas encontradas no banco:");
-          allIncomes.forEach(income => {
-            console.log(`- ID: ${income.id}, Valor: ${income.amount}, Data: ${income.date}, Tipo: ${income.type}`);
-          });
-        }
-
-        // Debug das transações no período
-        const transactionsInPeriod = allTransactions?.filter(t => 
-          t.date >= filters.startDate && t.date <= filters.endDate
-        ) || [];
-        console.log("Transações no período filtrado:", transactionsInPeriod.length);
-        
-        const incomesInPeriod = transactionsInPeriod.filter(t => t.type === "income");
-        console.log("Receitas no período:", incomesInPeriod.length);
-        
-        if (incomesInPeriod.length > 0) {
-          console.log("Receitas no período:");
-          incomesInPeriod.forEach(income => {
-            console.log(`- Valor: ${income.amount}, Data: ${income.date}`);
-          });
-        }
-      }
-
-      // Agora vamos fazer a consulta com joins para os relatórios
+      // Load transactions, categories, and accounts separately to avoid JOIN issues
       let transactionsQuery = supabase
         .from("transactions")
-        .select(`
-          id,
-          amount,
-          type,
-          description,
-          date,
-          user_id,
-          account_id,
-          category_id,
-          categories (
-            id,
-            name,
-            color,
-            type
-          ),
-          accounts (
-            id,
-            name
-          )
-        `)
+        .select("*")
         .eq("user_id", user.id)
         .gte("date", filters.startDate)
         .lte("date", filters.endDate)
         .order("date", { ascending: false });
 
-      // Aplicar filtros adicionais
+      // Apply additional filters
       if (filters.accountId) {
-        transactionsQuery = transactionsQuery.eq("account_id", filters.accountId);
+        transactionsQuery = transactionsQuery.eq(
+          "account_id",
+          filters.accountId,
+        );
       }
 
       if (filters.categoryId) {
-        transactionsQuery = transactionsQuery.eq("category_id", filters.categoryId);
+        transactionsQuery = transactionsQuery.eq(
+          "category_id",
+          filters.categoryId,
+        );
       }
 
-      const { data: transactions, error: transactionsError } = await transactionsQuery;
+      const [transactionsResult, categoriesResult, accountsResult] =
+        await Promise.all([
+          transactionsQuery,
+          supabase.from("categories").select("*").eq("user_id", user.id),
+          supabase.from("accounts").select("*").eq("user_id", user.id),
+        ]);
+
+      const { data: transactionsData, error: transactionsError } =
+        transactionsResult;
+      const { data: categoriesData } = categoriesResult;
+      const { data: accountsData } = accountsResult;
 
       if (transactionsError) {
-        console.error("Erro ao carregar transações com joins:", transactionsError);
+        console.error("Erro ao carregar transações:", transactionsError);
         setLoading(false);
         return;
       }
 
-      console.log("Transações carregadas com joins:", transactions?.length || 0);
+      console.log(
+        "Raw transactions data:",
+        transactionsData?.length || 0,
+        "transactions",
+      );
+      console.log("Date range:", filters.startDate, "to", filters.endDate);
 
-      if (!transactions || transactions.length === 0) {
-        console.log("Nenhuma transação encontrada no período com joins");
+      // Create lookup maps for categories and accounts
+      const categoriesMap = new Map(
+        (categoriesData || []).map((cat) => [cat.id, cat]),
+      );
+      const accountsMap = new Map(
+        (accountsData || []).map((acc) => [acc.id, acc]),
+      );
+
+      if (!transactionsData || transactionsData.length === 0) {
+        console.log("No transactions found for the selected period");
         setReportData({
           totalIncome: 0,
           totalExpenses: 0,
@@ -247,112 +229,102 @@ export function Reports() {
           expensesByCategory: [],
           topExpenseCategories: [],
         });
+        setTransactions([]);
         setLoading(false);
         return;
       }
 
-      // Validar e processar transações
-      const validTransactions = transactions.map(t => {
+      // Validate and process transactions with proper data mapping
+      const validTransactions = transactionsData.map((t) => {
         const amount = parseFloat(String(t.amount)) || 0;
+        const category = categoriesMap.get(t.category_id);
+        const account = accountsMap.get(t.account_id);
+
         return {
           ...t,
-          amount: amount
+          amount: amount,
+          categories: category,
+          accounts: account,
         };
       });
 
-      console.log("Transações validadas:", validTransactions.length);
+      console.log("Processed transactions:", validTransactions.length);
+      console.log(
+        "Income transactions:",
+        validTransactions.filter((t) => t.type === "income").length,
+      );
+      console.log(
+        "Expense transactions:",
+        validTransactions.filter((t) => t.type === "expense").length,
+      );
 
-      // Separar por tipo
-      const incomeTransactions = validTransactions.filter(t => t.type === "income");
-      const expenseTransactions = validTransactions.filter(t => t.type === "expense");
+      // Separate by type
+      const incomeTransactions = validTransactions.filter(
+        (t) => t.type === "income",
+      );
+      const expenseTransactions = validTransactions.filter(
+        (t) => t.type === "expense",
+      );
 
-      console.log("Receitas após join:", incomeTransactions.length);
-      console.log("Despesas após join:", expenseTransactions.length);
-
-      // Debug detalhado das receitas
-      if (incomeTransactions.length > 0) {
-        console.log("Detalhes das receitas após join:");
-        incomeTransactions.forEach(t => {
-          console.log(`- ${t.description}: R$ ${t.amount} (${t.date}) - Categoria: ${t.categories?.name || 'N/A'}`);
-        });
-      } else {
-        console.log("PROBLEMA: Nenhuma receita encontrada após o join!");
-        
-        // Vamos verificar se o problema está no join
-        const { data: simpleIncomes } = await supabase
-          .from("transactions")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("type", "income")
-          .gte("date", filters.startDate)
-          .lte("date", filters.endDate);
-          
-        console.log("Receitas sem join:", simpleIncomes?.length || 0);
-        
-        if (simpleIncomes && simpleIncomes.length > 0) {
-          console.log("Receitas encontradas sem join - problema está no join!");
-          simpleIncomes.forEach(income => {
-            console.log(`- Receita sem join: ${income.description}, Valor: ${income.amount}, Category ID: ${income.category_id}`);
-          });
-          
-          // Verificar se as categorias existem
-          for (const income of simpleIncomes) {
-            const { data: category } = await supabase
-              .from("categories")
-              .select("*")
-              .eq("id", income.category_id)
-              .single();
-              
-            console.log(`Categoria para receita ${income.id}:`, category);
-          }
-        }
-      }
-
-      // Calcular totais
-      const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
-      const totalExpenses = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
+      // Calculate totals
+      const totalIncome = incomeTransactions.reduce((sum, t) => {
+        console.log("Income transaction:", t.description, t.amount);
+        return sum + t.amount;
+      }, 0);
+      const totalExpenses = expenseTransactions.reduce(
+        (sum, t) => sum + t.amount,
+        0,
+      );
       const balance = totalIncome - totalExpenses;
 
-      console.log("=== TOTAIS CALCULADOS ===");
-      console.log("Total de receitas:", totalIncome);
-      console.log("Total de despesas:", totalExpenses);
-      console.log("Saldo:", balance);
+      console.log(
+        "Calculated totals - Income:",
+        totalIncome,
+        "Expenses:",
+        totalExpenses,
+        "Balance:",
+        balance,
+      );
 
-      // Agrupar por categoria
-      const categoryGroups = validTransactions.reduce((acc: any, transaction: any) => {
-        const categoryName = transaction.categories?.name || "Sem categoria";
-        const categoryColor = transaction.categories?.color || "#6B7280";
+      // Group by category
+      const categoryGroups = validTransactions.reduce(
+        (acc: any, transaction: any) => {
+          const categoryName = transaction.categories?.name || "Sem categoria";
+          const categoryColor = transaction.categories?.color || "#6B7280";
 
-        if (!acc[categoryName]) {
-          acc[categoryName] = {
-            name: categoryName,
-            income: 0,
-            expense: 0,
-            color: categoryColor,
-          };
-        }
+          if (!acc[categoryName]) {
+            acc[categoryName] = {
+              name: categoryName,
+              income: 0,
+              expense: 0,
+              color: categoryColor,
+            };
+          }
 
-        if (transaction.type === "income") {
-          acc[categoryName].income += transaction.amount;
-        } else {
-          acc[categoryName].expense += transaction.amount;
-        }
+          if (transaction.type === "income") {
+            acc[categoryName].income += transaction.amount;
+          } else {
+            acc[categoryName].expense += transaction.amount;
+          }
 
-        return acc;
-      }, {});
+          return acc;
+        },
+        {},
+      );
 
       const transactionsByCategory = Object.values(categoryGroups);
 
-      // Tendência mensal (últimos 6 meses)
+      // Monthly trend (last 6 months)
       const monthlyTrend = [];
       for (let i = 5; i >= 0; i--) {
         const month = subMonths(new Date(), i);
         const monthStart = format(startOfMonth(month), "yyyy-MM-dd");
         const monthEnd = format(endOfMonth(month), "yyyy-MM-dd");
 
-        // Filtrar transações do mês
+        // Filter transactions for the month with proper date comparison
         const monthTransactions = validTransactions.filter((t) => {
-          return t.date >= monthStart && t.date <= monthEnd;
+          const transactionDate = t.date;
+          return transactionDate >= monthStart && transactionDate <= monthEnd;
         });
 
         const monthIncome = monthTransactions
@@ -363,6 +335,10 @@ export function Reports() {
           .filter((t) => t.type === "expense")
           .reduce((sum, t) => sum + t.amount, 0);
 
+        console.log(
+          `Month ${format(month, "MMM", { locale: ptBR })}: ${monthTransactions.length} transactions, Income: ${monthIncome}, Expense: ${monthExpense}`,
+        );
+
         monthlyTrend.push({
           month: format(month, "MMM", { locale: ptBR }),
           income: monthIncome,
@@ -371,7 +347,7 @@ export function Reports() {
         });
       }
 
-      // Despesas por categoria para gráfico de pizza
+      // Expenses by category for pie chart
       const expensesByCategory = expenseTransactions
         .reduce((acc: any[], transaction: any) => {
           const categoryName = transaction.categories?.name || "Sem categoria";
@@ -393,7 +369,7 @@ export function Reports() {
         .sort((a, b) => b.value - a.value)
         .slice(0, 8);
 
-      // Top categorias de despesa
+      // Top expense categories
       const topExpenseCategories = expensesByCategory
         .slice(0, 5)
         .map((cat) => ({
@@ -403,14 +379,18 @@ export function Reports() {
           color: cat.color,
         }));
 
-      console.log("=== DADOS FINAIS ===");
-      console.log("Dados do relatório:", {
-        totalIncome,
-        totalExpenses,
-        balance,
-        categoriesCount: transactionsByCategory.length,
-        monthlyTrendCount: monthlyTrend.length,
-      });
+      // Format transactions for PDF export
+      const formattedTransactions: Transaction[] = validTransactions.map(
+        (t) => ({
+          id: t.id,
+          description: t.description,
+          amount: t.amount,
+          type: t.type as "income" | "expense",
+          date: t.date,
+          category: t.categories?.name || "Sem categoria",
+          account: t.accounts?.name || "Sem conta",
+        }),
+      );
 
       setReportData({
         totalIncome,
@@ -421,6 +401,7 @@ export function Reports() {
         expensesByCategory,
         topExpenseCategories,
       });
+      setTransactions(formattedTransactions);
     } catch (error) {
       console.error("Erro ao carregar dados do relatório:", error);
     } finally {
@@ -454,6 +435,82 @@ export function Reports() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+  };
+
+  const generatePDFFromScreen = async () => {
+    try {
+      setGeneratingPDF(true);
+
+      // Ocultar os filtros temporariamente
+      const filtersElement = document.getElementById('reports-filters');
+      if (filtersElement) {
+        filtersElement.style.display = 'none';
+      }
+
+      // Aguardar um pouco para garantir que os filtros foram ocultados
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Capturar a área de conteúdo dos relatórios (sem filtros)
+      const reportsContent = document.getElementById('reports-content');
+      if (!reportsContent) {
+        throw new Error('Área de relatórios não encontrada');
+      }
+
+      // Configurações do html2canvas
+      const canvas = await html2canvas(reportsContent, {
+        scale: 2, // Maior qualidade
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#f9fafb', // Cor de fundo
+        width: reportsContent.scrollWidth,
+        height: reportsContent.scrollHeight,
+      });
+
+      // Criar PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Adicionar primeira página
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      // Adicionar páginas adicionais se necessário
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      // Salvar o PDF
+      const fileName = `relatorio-financeiro-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`;
+      pdf.save(fileName);
+
+      // Restaurar os filtros
+      if (filtersElement) {
+        filtersElement.style.display = 'block';
+      }
+
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Erro ao gerar PDF. Tente novamente.");
+      
+      // Garantir que os filtros sejam restaurados mesmo em caso de erro
+      const filtersElement = document.getElementById('reports-filters');
+      if (filtersElement) {
+        filtersElement.style.display = 'block';
+      }
+    } finally {
+      setGeneratingPDF(false);
     }
   };
 
@@ -495,17 +552,27 @@ export function Reports() {
             Análise detalhada das suas finanças
           </p>
         </div>
-        <button
-          onClick={exportToCSV}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          <span>Exportar CSV</span>
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={exportToCSV}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Exportar CSV</span>
+          </button>
+          <button
+            onClick={generatePDFFromScreen}
+            disabled={generatingPDF}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors disabled:opacity-50"
+          >
+            <FileText className="w-4 h-4" />
+            <span>{generatingPDF ? "Gerando PDF..." : "Gerar PDF"}</span>
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
+      <div id="reports-filters" className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
         <div className="flex items-center space-x-2 mb-4">
           <Filter className="w-5 h-5 text-gray-600" />
           <span className="font-medium text-gray-900">Filtros</span>
@@ -595,194 +662,197 @@ export function Reports() {
         </div>
       </div>
 
-      {/* Cards de Resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">
-                Total de Receitas
-              </p>
-              <p className="text-2xl font-bold text-green-600">
-                {formatCurrency(reportData.totalIncome)}
-              </p>
+      {/* Conteúdo dos Relatórios */}
+      <div id="reports-content">
+        {/* Cards de Resumo */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Total de Receitas
+                </p>
+                <p className="text-2xl font-bold text-green-600">
+                  {formatCurrency(reportData.totalIncome)}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-green-600" />
+              </div>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-green-600" />
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Total de Despesas
+                </p>
+                <p className="text-2xl font-bold text-red-600">
+                  {formatCurrency(reportData.totalExpenses)}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                <TrendingDown className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Saldo do Período
+                </p>
+                <p
+                  className={`text-2xl font-bold ${
+                    reportData.balance >= 0 ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {formatCurrency(reportData.balance)}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <FileText className="w-6 h-6 text-blue-600" />
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">
-                Total de Despesas
-              </p>
-              <p className="text-2xl font-bold text-red-600">
-                {formatCurrency(reportData.totalExpenses)}
-              </p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* Tendência Mensal */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Tendência Mensal
+            </h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={reportData.monthlyTrend}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                  <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                  <Line
+                    type="monotone"
+                    dataKey="income"
+                    stroke="#059669"
+                    strokeWidth={2}
+                    name="Receitas"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="expense"
+                    stroke="#DC2626"
+                    strokeWidth={2}
+                    name="Despesas"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="balance"
+                    stroke="#2563EB"
+                    strokeWidth={2}
+                    name="Saldo"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
-            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-              <TrendingDown className="w-6 h-6 text-red-600" />
-            </div>
+          </div>
+
+          {/* Despesas por Categoria */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Despesas por Categoria
+            </h3>
+            {reportData.expensesByCategory.length > 0 ? (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsPieChart>
+                    <Pie
+                      data={reportData.expensesByCategory}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {reportData.expensesByCategory.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => formatCurrency(Number(value))}
+                    />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                Nenhuma despesa encontrada
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">
-                Saldo do Período
-              </p>
-              <p
-                className={`text-2xl font-bold ${
-                  reportData.balance >= 0 ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {formatCurrency(reportData.balance)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <FileText className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        {/* Tendência Mensal */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        {/* Comparação por Categoria */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Tendência Mensal
+            Receitas vs Despesas por Categoria
           </h3>
-          <div className="h-64">
+          <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={reportData.monthlyTrend}>
+              <BarChart data={reportData.transactionsByCategory}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
+                <XAxis dataKey="name" />
                 <YAxis tickFormatter={(value) => formatCurrency(value)} />
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                <Line
-                  type="monotone"
-                  dataKey="income"
-                  stroke="#059669"
-                  strokeWidth={2}
-                  name="Receitas"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="expense"
-                  stroke="#DC2626"
-                  strokeWidth={2}
-                  name="Despesas"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="balance"
-                  stroke="#2563EB"
-                  strokeWidth={2}
-                  name="Saldo"
-                />
-              </LineChart>
+                <Bar dataKey="income" fill="#059669" name="Receitas" />
+                <Bar dataKey="expense" fill="#DC2626" name="Despesas" />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Despesas por Categoria */}
+        {/* Top Categorias de Despesa */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Despesas por Categoria
+            Principais Categorias de Despesa
           </h3>
-          {reportData.expensesByCategory.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <RechartsPieChart>
-                  <Pie
-                    data={reportData.expensesByCategory}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {reportData.expensesByCategory.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value) => formatCurrency(Number(value))}
+          <div className="space-y-4">
+            {reportData.topExpenseCategories.map((category, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center justify-center w-8 h-8 bg-gray-200 rounded-full text-sm font-medium text-gray-600">
+                    {index + 1}
+                  </div>
+                  <div
+                    className="w-4 h-4 rounded-full"
+                    style={{ backgroundColor: category.color }}
                   />
-                </RechartsPieChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-64 text-gray-500">
-              Nenhuma despesa encontrada
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Comparação por Categoria */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Receitas vs Despesas por Categoria
-        </h3>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={reportData.transactionsByCategory}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis tickFormatter={(value) => formatCurrency(value)} />
-              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-              <Bar dataKey="income" fill="#059669" name="Receitas" />
-              <Bar dataKey="expense" fill="#DC2626" name="Despesas" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Top Categorias de Despesa */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Principais Categorias de Despesa
-        </h3>
-        <div className="space-y-4">
-          {reportData.topExpenseCategories.map((category, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-            >
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center justify-center w-8 h-8 bg-gray-200 rounded-full text-sm font-medium text-gray-600">
-                  {index + 1}
+                  <span className="font-medium text-gray-900">
+                    {category.name}
+                  </span>
                 </div>
-                <div
-                  className="w-4 h-4 rounded-full"
-                  style={{ backgroundColor: category.color }}
-                />
-                <span className="font-medium text-gray-900">
-                  {category.name}
-                </span>
+                <div className="text-right">
+                  <p className="font-semibold text-gray-900">
+                    {formatCurrency(category.amount)}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {category.percentage.toFixed(1)}% do total
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="font-semibold text-gray-900">
-                  {formatCurrency(category.amount)}
-                </p>
-                <p className="text-sm text-gray-600">
-                  {category.percentage.toFixed(1)}% do total
-                </p>
-              </div>
-            </div>
-          ))}
+            ))}
 
-          {reportData.topExpenseCategories.length === 0 && (
-            <div className="text-center text-gray-500 py-8">
-              Nenhuma despesa encontrada no período selecionado
-            </div>
-          )}
+            {reportData.topExpenseCategories.length === 0 && (
+              <div className="text-center text-gray-500 py-8">
+                Nenhuma despesa encontrada no período selecionado
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

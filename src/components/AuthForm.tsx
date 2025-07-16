@@ -22,7 +22,18 @@ export function AuthForm() {
         : await signUp(email, password)
 
       if (error) {
-        setError(error.message)
+        // Provide user-friendly error messages
+        if (error.message.includes('Invalid login credentials')) {
+          setError('Email ou senha incorretos. Verifique suas credenciais e tente novamente.')
+        } else if (error.message.includes('Email not confirmed')) {
+          setError('Por favor, confirme seu email antes de fazer login.')
+        } else if (error.message.includes('User already registered')) {
+          setError('Este email já está cadastrado. Tente fazer login.')
+        } else if (error.message.includes('Password should be at least')) {
+          setError('A senha deve ter pelo menos 6 caracteres.')
+        } else {
+          setError(error.message)
+        }
       }
     } catch (err) {
       setError('Ocorreu um erro inesperado')
@@ -39,7 +50,7 @@ export function AuthForm() {
             <LogIn className="w-8 h-8 text-white" />
           </div>
           <h2 className="text-3xl font-bold text-gray-900">
-            Sistema Financeiro
+            Gestão
           </h2>
           <p className="mt-2 text-gray-600">
             {isLogin ? 'Entre na sua conta' : 'Crie sua conta gratuita'}

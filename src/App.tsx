@@ -7,10 +7,15 @@ import { Layout } from "./components/Layout";
 import { Dashboard } from "./components/Dashboard";
 import { Accounts } from "./components/Accounts";
 import { Transactions } from "./components/Transactions";
+import { Transfers } from "./components/Transfers";
+import { CreditCards } from "./components/CreditCards";
 import { Categories } from "./components/Categories";
 import { Budgets } from "./components/Budgets";
 import { Reports } from "./components/Reports";
 import { Settings } from "./components/Settings";
+import { Patients } from "./components/Patients";
+import { Sessions } from "./components/Sessions";
+import { PatientPayments } from "./components/PatientPayments";
 
 function App() {
   const { user, loading } = useAuth();
@@ -36,12 +41,22 @@ function App() {
         return <Accounts />;
       case "transactions":
         return <Transactions />;
+      case "transfers":
+        return <Transfers />;
+      case "credit-cards":
+        return <CreditCards />;
       case "categories":
         return <Categories />;
       case "budgets":
         return <Budgets />;
       case "reports":
         return <Reports />;
+      case "patients":
+        return <Patients />;
+      case "sessions":
+        return <Sessions />;
+      case "patient-payments":
+        return <PatientPayments />;
       case "settings":
         return <Settings />;
       default:

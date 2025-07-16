@@ -1,48 +1,61 @@
-import React, { useState } from 'react'
-import { useAuth } from '../hooks/useAuth'
-import { 
-  LayoutDashboard, 
-  CreditCard, 
-  ArrowUpDown, 
-  PieChart, 
-  Target, 
-  FileText, 
-  Settings, 
+import React, { useState } from "react";
+import { useAuth } from "../hooks/useAuth";
+import {
+  LayoutDashboard,
+  CreditCard,
+  ArrowUpDown,
+  PieChart,
+  Target,
+  FileText,
+  Settings,
   LogOut,
   Menu,
-  X
-} from 'lucide-react'
+  X,
+  ArrowRightLeft,
+  Wallet,
+  Users,
+  Calendar,
+  DollarSign,
+} from "lucide-react";
 
 interface LayoutProps {
-  children: React.ReactNode
-  currentPage: string
-  onPageChange: (page: string) => void
+  children: React.ReactNode;
+  currentPage: string;
+  onPageChange: (page: string) => void;
 }
 
 const navigation = [
-  { name: 'Dashboard', icon: LayoutDashboard, key: 'dashboard' },
-  { name: 'Contas', icon: CreditCard, key: 'accounts' },
-  { name: 'Lançamentos', icon: ArrowUpDown, key: 'transactions' },
-  { name: 'Categorias', icon: PieChart, key: 'categories' },
-  { name: 'Orçamentos', icon: Target, key: 'budgets' },
-  { name: 'Relatórios', icon: FileText, key: 'reports' },
-  { name: 'Configurações', icon: Settings, key: 'settings' },
-]
+  { name: "Dashboard", icon: LayoutDashboard, key: "dashboard" },
+  { name: "Contas", icon: Wallet, key: "accounts" },
+  { name: "Lançamentos", icon: ArrowUpDown, key: "transactions" },
+  { name: "Transferências", icon: ArrowRightLeft, key: "transfers" },
+  { name: "Cartões", icon: CreditCard, key: "credit-cards" },
+  { name: "Categorias", icon: PieChart, key: "categories" },
+  { name: "Orçamentos", icon: Target, key: "budgets" },
+  { name: "Relatórios", icon: FileText, key: "reports" },
+  { name: "Pacientes", icon: Users, key: "patients" },
+  { name: "Sessões", icon: Calendar, key: "sessions" },
+  { name: "Pagamentos", icon: DollarSign, key: "patient-payments" },
+  { name: "Configurações", icon: Settings, key: "settings" },
+];
 
 export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { user, signOut } = useAuth()
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, signOut } = useAuth();
 
   const handleSignOut = async () => {
-    await signOut()
-  }
+    await signOut();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile sidebar */}
       {sidebarOpen && (
         <div className="fixed inset-0 flex z-40 lg:hidden">
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
+          <div
+            className="fixed inset-0 bg-gray-600 bg-opacity-75"
+            onClick={() => setSidebarOpen(false)}
+          />
           <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white">
             <div className="absolute top-0 right-0 -mr-12 pt-2">
               <button
@@ -57,20 +70,22 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                   <LayoutDashboard className="w-5 h-5 text-white" />
                 </div>
-                <span className="ml-3 text-xl font-semibold text-gray-900">FinanceApp</span>
+                <span className="ml-3 text-xl font-semibold text-gray-900">
+                  FinanceApp
+                </span>
               </div>
               <nav className="mt-5 px-2 space-y-1">
                 {navigation.map((item) => (
                   <button
                     key={item.key}
                     onClick={() => {
-                      onPageChange(item.key)
-                      setSidebarOpen(false)
+                      onPageChange(item.key);
+                      setSidebarOpen(false);
                     }}
                     className={`${
                       currentPage === item.key
-                        ? 'bg-blue-100 text-blue-900'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        ? "bg-blue-100 text-blue-900"
+                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                     } group flex items-center w-full px-2 py-2 text-sm font-medium rounded-md transition-colors`}
                   >
                     <item.icon className="mr-3 flex-shrink-0 h-5 w-5" />
@@ -100,7 +115,9 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <LayoutDashboard className="w-5 h-5 text-white" />
               </div>
-              <span className="ml-3 text-xl font-semibold text-gray-900">FinanceApp</span>
+              <span className="ml-3 text-xl font-semibold text-gray-900">
+                Gestão
+              </span>
             </div>
             <nav className="mt-5 flex-1 px-2 space-y-1">
               {navigation.map((item) => (
@@ -109,8 +126,8 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
                   onClick={() => onPageChange(item.key)}
                   className={`${
                     currentPage === item.key
-                      ? 'bg-blue-100 text-blue-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      ? "bg-blue-100 text-blue-900"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   } group flex items-center w-full px-2 py-2 text-sm font-medium rounded-md transition-colors`}
                 >
                   <item.icon className="mr-3 flex-shrink-0 h-5 w-5" />
@@ -127,7 +144,9 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
                 </span>
               </div>
               <div className="ml-3 flex-1">
-                <p className="text-sm font-medium text-gray-900 truncate">{user?.email}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {user?.email}
+                </p>
                 <button
                   onClick={handleSignOut}
                   className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
@@ -150,14 +169,14 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
             >
               <Menu className="h-6 w-6" />
             </button>
-            <span className="text-lg font-semibold text-gray-900">FinanceApp</span>
+            <span className="text-lg font-semibold text-gray-900">
+              Gestão
+            </span>
             <div className="w-8" />
           </div>
         </div>
-        <main className="flex-1 pb-8">
-          {children}
-        </main>
+        <main className="flex-1 pb-8">{children}</main>
       </div>
     </div>
-  )
+  );
 }
