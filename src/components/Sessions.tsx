@@ -324,7 +324,8 @@ export function Sessions() {
   const calculateEndTime = (startTime: string, duration: number) => {
     try {
       // Parse the datetime correctly from database format
-      const start = new Date(startTime);
+      // Parse the timestamp correctly considering timezone
+      const start = new Date(startTime + (startTime.includes('T') ? '' : 'T00:00:00'));
       const end = addMinutes(start, duration);
       return format(end, "HH:mm");
     } catch {
@@ -507,7 +508,7 @@ export function Sessions() {
                         <div className="flex items-center space-x-2">
                           <Calendar className="w-4 h-4" />
                           <span>
-                            {format(sessionDate, "dd/MM/yyyy", {
+                            {format(new Date(session.session_date + 'Z'), "dd/MM/yyyy", {
                               locale: ptBR,
                             })}
                           </span>
@@ -515,7 +516,7 @@ export function Sessions() {
                         <div className="flex items-center space-x-2">
                           <Clock className="w-4 h-4" />
                           <span>
-                            {format(sessionDate, "HH:mm")} - {endTime} (
+                            {format(new Date(session.session_date + 'Z'), "HH:mm")} - {endTime} (
                             {session.duration_minutes || 50}min)
                           </span>
                         </div>
@@ -841,7 +842,7 @@ export function Sessions() {
                   <div className="flex items-center space-x-3">
                     <Calendar className="w-5 h-5 text-gray-400" />
                     <span className="text-gray-700">
-                      {format(new Date(viewingSession.session_date), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      {format(new Date(viewingSession.session_date + 'Z'), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                     </span>
                   </div>
 
@@ -853,7 +854,7 @@ export function Sessions() {
                         <span className="text-gray-500 ml-2">
                           (até{" "}
                           {calculateEndTime(
-                            viewingSession.session_date,
+                            viewingSession.session_date + 'Z',
                             viewingSession.duration_minutes || 50,
                           )}
                           )
@@ -879,7 +880,7 @@ export function Sessions() {
                     <div className="flex items-center space-x-3">
                       <Calendar className="w-5 h-5 text-gray-400" />
                       <span className="text-gray-700">
-                        {format(new Date(viewingSession.next_session_date), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                        {format(new Date(viewingSession.next_session_date + 'Z'), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                       </span>
                     </div>
                   ) : (
@@ -933,12 +934,12 @@ export function Sessions() {
               <div className="text-sm text-gray-500 pt-4 border-t border-gray-200">
                 <p>
                   Criada em:{" "}
-                  {format(new Date(viewingSession.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                  {format(new Date(viewingSession.created_at + 'Z'), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                 </p>
                 {viewingSession.updated_at !== viewingSession.created_at && (
                   <p>
                     Última atualização:{" "}
-                    {format(new Date(viewingSession.updated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    {format(new Date(viewingSession.updated_at + 'Z'), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                   </p>
                 )}
               </div>
