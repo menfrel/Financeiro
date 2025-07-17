@@ -99,19 +99,23 @@ export function Sessions() {
         setSessions([]);
       } else {
         console.log("Raw sessions data:", sessionsData);
-        
+
         // Depois carregar os dados dos pacientes e fazer o merge manual
         if (sessionsData && sessionsData.length > 0) {
-          const patientIds = [...new Set(sessionsData.map(s => s.patient_id))];
+          const patientIds = [
+            ...new Set(sessionsData.map((s) => s.patient_id)),
+          ];
           const { data: patientsForSessions } = await supabase
             .from("patients")
             .select("id, name, email, phone")
             .in("id", patientIds);
 
           // Fazer merge manual dos dados
-          const sessionsWithPatients = sessionsData.map(session => ({
+          const sessionsWithPatients = sessionsData.map((session) => ({
             ...session,
-            patient: patientsForSessions?.find(p => p.id === session.patient_id) || null
+            patient:
+              patientsForSessions?.find((p) => p.id === session.patient_id) ||
+              null,
           }));
 
           console.log("Sessions with patients:", sessionsWithPatients);
@@ -208,13 +212,33 @@ export function Sessions() {
   const handleEdit = (session: Session) => {
     setEditingSession(session);
     setValue("patient_id", session.patient_id);
-    setValue("session_date", session.session_date);
+    // Convert database date to local datetime-local format
+    const sessionDate = new Date(session.session_date);
+    const year = sessionDate.getFullYear();
+    const month = String(sessionDate.getMonth() + 1).padStart(2, "0");
+    const day = String(sessionDate.getDate()).padStart(2, "0");
+    const hours = String(sessionDate.getHours()).padStart(2, "0");
+    const minutes = String(sessionDate.getMinutes()).padStart(2, "0");
+    const localDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+    setValue("session_date", localDateTime);
     setValue("duration_minutes", session.duration_minutes);
     setValue("session_type", session.session_type);
     setValue("notes", session.notes || "");
     setValue("objectives", session.objectives || "");
     setValue("homework", session.homework || "");
-    setValue("next_session_date", session.next_session_date || "");
+    // Convert next session date if it exists
+    if (session.next_session_date) {
+      const nextSessionDate = new Date(session.next_session_date);
+      const nextYear = nextSessionDate.getFullYear();
+      const nextMonth = String(nextSessionDate.getMonth() + 1).padStart(2, "0");
+      const nextDay = String(nextSessionDate.getDate()).padStart(2, "0");
+      const nextHours = String(nextSessionDate.getHours()).padStart(2, "0");
+      const nextMinutes = String(nextSessionDate.getMinutes()).padStart(2, "0");
+      const localNextDateTime = `${nextYear}-${nextMonth}-${nextDay}T${nextHours}:${nextMinutes}`;
+      setValue("next_session_date", localNextDateTime);
+    } else {
+      setValue("next_session_date", "");
+    }
     setValue("status", session.status);
     setIsModalOpen(true);
   };
@@ -323,11 +347,16 @@ export function Sessions() {
 
   const calculateEndTime = (startTime: string, duration: number) => {
     try {
-      // Parse the datetime correctly from database format
-      // Parse the timestamp correctly considering timezone
-      const start = new Date(startTime + (startTime.includes('T') ? '' : 'T00:00:00'));
+      const start = new Date(startTime);
+      if (isNaN(start.getTime())) {
+        return "";
+      }
       const end = addMinutes(start, duration);
-      return format(end, "HH:mm");
+      return (
+        String(end.getHours()).padStart(2, "0") +
+        ":" +
+        String(end.getMinutes()).padStart(2, "0")
+      );
     } catch {
       return "";
     }
@@ -335,7 +364,9 @@ export function Sessions() {
 
   const filteredSessions = sessions.filter((session) => {
     const matchesSearch =
-      (session.patient?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (session.patient?.name || "")
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
       (session.notes &&
         session.notes.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (session.objectives &&
@@ -495,7 +526,7 @@ export function Sessions() {
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
                         <h3 className="font-semibold text-gray-900">
-                          {session.patient?.name || 'Paciente não encontrado'}
+                          {session.patient?.name || "Paciente não encontrado"}
                         </h3>
                         <span
                           className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(session.status)}`}
@@ -508,16 +539,44 @@ export function Sessions() {
                         <div className="flex items-center space-x-2">
                           <Calendar className="w-4 h-4" />
                           <span>
-                            {format(new Date(session.session_date + 'Z'), "dd/MM/yyyy", {
-                              locale: ptBR,
-                            })}
+                            {(() => {
+                              try {
+                                const date = new Date(session.session_date);
+                                return isNaN(date.getTime())
+                                  ? "Data inválida"
+                                  : String(date.getDate()).padStart(2, "0") +
+                                      "/" +
+                                      String(date.getMonth() + 1).padStart(
+                                        2,
+                                        "0",
+                                      ) +
+                                      "/" +
+                                      date.getFullYear();
+                              } catch {
+                                return "Data inválida";
+                              }
+                            })()}
                           </span>
                         </div>
                         <div className="flex items-center space-x-2">
                           <Clock className="w-4 h-4" />
                           <span>
-                            {format(new Date(session.session_date + 'Z'), "HH:mm")} - {endTime} (
-                            {session.duration_minutes || 50}min)
+                            {(() => {
+                              try {
+                                const date = new Date(session.session_date);
+                                return isNaN(date.getTime())
+                                  ? "Hora inválida"
+                                  : String(date.getHours()).padStart(2, "0") +
+                                      ":" +
+                                      String(date.getMinutes()).padStart(
+                                        2,
+                                        "0",
+                                      );
+                              } catch {
+                                return "Hora inválida";
+                              }
+                            })()}{" "}
+                            - {endTime} ({session.duration_minutes || 50}min)
                           </span>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -842,7 +901,24 @@ export function Sessions() {
                   <div className="flex items-center space-x-3">
                     <Calendar className="w-5 h-5 text-gray-400" />
                     <span className="text-gray-700">
-                      {format(new Date(viewingSession.session_date + 'Z'), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      {(() => {
+                        try {
+                          const date = new Date(viewingSession.session_date);
+                          return isNaN(date.getTime())
+                            ? "Data inválida"
+                            : String(date.getDate()).padStart(2, "0") +
+                                "/" +
+                                String(date.getMonth() + 1).padStart(2, "0") +
+                                "/" +
+                                date.getFullYear() +
+                                " " +
+                                String(date.getHours()).padStart(2, "0") +
+                                ":" +
+                                String(date.getMinutes()).padStart(2, "0");
+                        } catch {
+                          return "Data inválida";
+                        }
+                      })()}
                     </span>
                   </div>
 
@@ -854,7 +930,7 @@ export function Sessions() {
                         <span className="text-gray-500 ml-2">
                           (até{" "}
                           {calculateEndTime(
-                            viewingSession.session_date + 'Z',
+                            viewingSession.session_date,
                             viewingSession.duration_minutes || 50,
                           )}
                           )
@@ -880,7 +956,26 @@ export function Sessions() {
                     <div className="flex items-center space-x-3">
                       <Calendar className="w-5 h-5 text-gray-400" />
                       <span className="text-gray-700">
-                        {format(new Date(viewingSession.next_session_date + 'Z'), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                        {(() => {
+                          try {
+                            const date = new Date(
+                              viewingSession.next_session_date,
+                            );
+                            return isNaN(date.getTime())
+                              ? "Data inválida"
+                              : String(date.getDate()).padStart(2, "0") +
+                                  "/" +
+                                  String(date.getMonth() + 1).padStart(2, "0") +
+                                  "/" +
+                                  date.getFullYear() +
+                                  " " +
+                                  String(date.getHours()).padStart(2, "0") +
+                                  ":" +
+                                  String(date.getMinutes()).padStart(2, "0");
+                          } catch {
+                            return "Data inválida";
+                          }
+                        })()}
                       </span>
                     </div>
                   ) : (
@@ -934,12 +1029,34 @@ export function Sessions() {
               <div className="text-sm text-gray-500 pt-4 border-t border-gray-200">
                 <p>
                   Criada em:{" "}
-                  {format(new Date(viewingSession.created_at + 'Z'), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                  {(() => {
+                    try {
+                      const date = new Date(viewingSession.created_at);
+                      return isNaN(date.getTime())
+                        ? "Data inválida"
+                        : format(date, "dd/MM/yyyy 'às' HH:mm", {
+                            locale: ptBR,
+                          });
+                    } catch {
+                      return "Data inválida";
+                    }
+                  })()}
                 </p>
                 {viewingSession.updated_at !== viewingSession.created_at && (
                   <p>
                     Última atualização:{" "}
-                    {format(new Date(viewingSession.updated_at + 'Z'), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    {(() => {
+                      try {
+                        const date = new Date(viewingSession.updated_at);
+                        return isNaN(date.getTime())
+                          ? "Data inválida"
+                          : format(date, "dd/MM/yyyy 'às' HH:mm", {
+                              locale: ptBR,
+                            });
+                      } catch {
+                        return "Data inválida";
+                      }
+                    })()}
                   </p>
                 )}
               </div>
