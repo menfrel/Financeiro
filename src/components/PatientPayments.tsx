@@ -124,7 +124,6 @@ export function PatientPayments() {
         console.error("Error loading payments:", paymentsError);
         setPayments([]);
       } else {
-        console.log("Raw payments data:", paymentsData);
         
         // Depois carregar os dados relacionados e fazer merge manual
         if (paymentsData && paymentsData.length > 0) {
@@ -153,15 +152,11 @@ export function PatientPayments() {
               : null
           }));
 
-          console.log("Payments with relations:", paymentsWithRelations);
           setPayments(paymentsWithRelations);
         } else {
           setPayments([]);
         }
       }
-
-      console.log("Payments loaded:", paymentsData?.length || 0);
-      console.log("Patients loaded:", patientsData?.length || 0);
 
       // Carregar contas
       const { data: accountsData, error: accountsError } = await supabase

@@ -23,8 +23,18 @@ import {
 import { useForm } from "react-hook-form";
 import { format, parse, addMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatInTimeZone } from 'date-fns-tz';
 import { Session, SessionForm, Patient } from "../types/patients";
 import { googleCalendarService } from "../lib/googleCalendar";
+
+// Função utilitária para garantir o offset de Brasília ao salvar
+function toBrasiliaISOString(localDateString: string) {
+  if (!localDateString) return null;
+  // Garante o formato "YYYY-MM-DDTHH:mm:00-03:00"
+  return localDateString.length === 16
+    ? localDateString + ":00-03:00"
+    : localDateString;
+}
 
 export function Sessions() {
   const { user } = useAuth();
@@ -98,8 +108,6 @@ export function Sessions() {
         console.error("Error loading sessions:", sessionsError);
         setSessions([]);
       } else {
-        console.log("Raw sessions data:", sessionsData);
-
         // Depois carregar os dados dos pacientes e fazer o merge manual
         if (sessionsData && sessionsData.length > 0) {
           const patientIds = [
@@ -118,14 +126,11 @@ export function Sessions() {
               null,
           }));
 
-          console.log("Sessions with patients:", sessionsWithPatients);
           setSessions(sessionsWithPatients);
         } else {
           setSessions([]);
         }
       }
-
-      console.log("Patients loaded:", patientsData?.length || 0);
 
       setPatients(patientsData || []);
     } catch (error) {
@@ -149,13 +154,13 @@ export function Sessions() {
       const sessionData = {
         user_id: user.id,
         patient_id: data.patient_id,
-        session_date: data.session_date,
+        session_date: toBrasiliaISOString(data.session_date),
         duration_minutes: data.duration_minutes,
         session_type: data.session_type,
         notes: data.notes || null,
         objectives: data.objectives || null,
         homework: data.homework || null,
-        next_session_date: data.next_session_date || null,
+        next_session_date: toBrasiliaISOString(data.next_session_date),
         status: data.status,
       };
 
@@ -190,7 +195,6 @@ export function Sessions() {
             });
 
             await googleCalendarService.createEvent(calendarEvent);
-            console.log("Sessão sincronizada com Google Calendar");
           }
         } catch (error) {
           console.error("Erro ao sincronizar com Google Calendar:", error);
@@ -212,30 +216,25 @@ export function Sessions() {
   const handleEdit = (session: Session) => {
     setEditingSession(session);
     setValue("patient_id", session.patient_id);
-    // Convert database date to local datetime-local format
-    const sessionDate = new Date(session.session_date);
-    const year = sessionDate.getFullYear();
-    const month = String(sessionDate.getMonth() + 1).padStart(2, "0");
-    const day = String(sessionDate.getDate()).padStart(2, "0");
-    const hours = String(sessionDate.getHours()).padStart(2, "0");
-    const minutes = String(sessionDate.getMinutes()).padStart(2, "0");
-    const localDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
-    setValue("session_date", localDateTime);
+    // Converter UTC para local para o input datetime-local
+    if (session.session_date) {
+      const utcDate = new Date(session.session_date);
+      const tzOffset = utcDate.getTimezoneOffset() * 60000;
+      const localISO = new Date(utcDate.getTime() - tzOffset).toISOString().slice(0, 16);
+      setValue("session_date", localISO);
+    } else {
+      setValue("session_date", "");
+    }
     setValue("duration_minutes", session.duration_minutes);
     setValue("session_type", session.session_type);
     setValue("notes", session.notes || "");
     setValue("objectives", session.objectives || "");
     setValue("homework", session.homework || "");
-    // Convert next session date if it exists
     if (session.next_session_date) {
-      const nextSessionDate = new Date(session.next_session_date);
-      const nextYear = nextSessionDate.getFullYear();
-      const nextMonth = String(nextSessionDate.getMonth() + 1).padStart(2, "0");
-      const nextDay = String(nextSessionDate.getDate()).padStart(2, "0");
-      const nextHours = String(nextSessionDate.getHours()).padStart(2, "0");
-      const nextMinutes = String(nextSessionDate.getMinutes()).padStart(2, "0");
-      const localNextDateTime = `${nextYear}-${nextMonth}-${nextDay}T${nextHours}:${nextMinutes}`;
-      setValue("next_session_date", localNextDateTime);
+      const utcDate = new Date(session.next_session_date);
+      const tzOffset = utcDate.getTimezoneOffset() * 60000;
+      const localISO = new Date(utcDate.getTime() - tzOffset).toISOString().slice(0, 16);
+      setValue("next_session_date", localISO);
     } else {
       setValue("next_session_date", "");
     }
@@ -539,44 +538,13 @@ export function Sessions() {
                         <div className="flex items-center space-x-2">
                           <Calendar className="w-4 h-4" />
                           <span>
-                            {(() => {
-                              try {
-                                const date = new Date(session.session_date);
-                                return isNaN(date.getTime())
-                                  ? "Data inválida"
-                                  : String(date.getDate()).padStart(2, "0") +
-                                      "/" +
-                                      String(date.getMonth() + 1).padStart(
-                                        2,
-                                        "0",
-                                      ) +
-                                      "/" +
-                                      date.getFullYear();
-                              } catch {
-                                return "Data inválida";
-                              }
-                            })()}
+                            {formatInTimeZone(session.session_date, 'America/Sao_Paulo', 'dd/MM/yyyy')}
                           </span>
                         </div>
                         <div className="flex items-center space-x-2">
                           <Clock className="w-4 h-4" />
                           <span>
-                            {(() => {
-                              try {
-                                const date = new Date(session.session_date);
-                                return isNaN(date.getTime())
-                                  ? "Hora inválida"
-                                  : String(date.getHours()).padStart(2, "0") +
-                                      ":" +
-                                      String(date.getMinutes()).padStart(
-                                        2,
-                                        "0",
-                                      );
-                              } catch {
-                                return "Hora inválida";
-                              }
-                            })()}{" "}
-                            - {endTime} ({session.duration_minutes || 50}min)
+                            {formatInTimeZone(session.session_date, 'America/Sao_Paulo', 'HH:mm')} - {endTime} ({session.duration_minutes || 50}min)
                           </span>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -901,24 +869,7 @@ export function Sessions() {
                   <div className="flex items-center space-x-3">
                     <Calendar className="w-5 h-5 text-gray-400" />
                     <span className="text-gray-700">
-                      {(() => {
-                        try {
-                          const date = new Date(viewingSession.session_date);
-                          return isNaN(date.getTime())
-                            ? "Data inválida"
-                            : String(date.getDate()).padStart(2, "0") +
-                                "/" +
-                                String(date.getMonth() + 1).padStart(2, "0") +
-                                "/" +
-                                date.getFullYear() +
-                                " " +
-                                String(date.getHours()).padStart(2, "0") +
-                                ":" +
-                                String(date.getMinutes()).padStart(2, "0");
-                        } catch {
-                          return "Data inválida";
-                        }
-                      })()}
+                      {formatInTimeZone(viewingSession.session_date, 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm')}
                     </span>
                   </div>
 
@@ -956,26 +907,7 @@ export function Sessions() {
                     <div className="flex items-center space-x-3">
                       <Calendar className="w-5 h-5 text-gray-400" />
                       <span className="text-gray-700">
-                        {(() => {
-                          try {
-                            const date = new Date(
-                              viewingSession.next_session_date,
-                            );
-                            return isNaN(date.getTime())
-                              ? "Data inválida"
-                              : String(date.getDate()).padStart(2, "0") +
-                                  "/" +
-                                  String(date.getMonth() + 1).padStart(2, "0") +
-                                  "/" +
-                                  date.getFullYear() +
-                                  " " +
-                                  String(date.getHours()).padStart(2, "0") +
-                                  ":" +
-                                  String(date.getMinutes()).padStart(2, "0");
-                          } catch {
-                            return "Data inválida";
-                          }
-                        })()}
+                        {formatInTimeZone(viewingSession.next_session_date, 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm')}
                       </span>
                     </div>
                   ) : (
