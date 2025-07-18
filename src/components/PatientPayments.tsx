@@ -16,15 +16,18 @@ import {
   Trash2,
   Eye,
   Filter,
+  Repeat,
+  ChevronLeft,
+  ChevronRight,
+  BarChart3,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { format } from "date-fns";
+import { format, addMonths, addWeeks, startOfMonth, endOfMonth, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   PatientPayment,
   PatientPaymentForm,
   Patient,
-  Session,
 } from "../types/patients";
 
 interface Account {
@@ -44,7 +47,6 @@ export function PatientPayments() {
   const { user } = useAuth();
   const [payments, setPayments] = useState<PatientPayment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,6 +62,8 @@ export function PatientPayments() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [patientFilter, setPatientFilter] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"list" | "monthly">("list");
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const {
     register,
@@ -72,6 +76,7 @@ export function PatientPayments() {
 
   const watchPatientId = watch("patient_id");
   const watchCreateTransaction = watch("create_transaction");
+  const watchIsRecurring = watch("is_recurring");
 
   useEffect(() => {
     if (user) {
@@ -101,17 +106,6 @@ export function PatientPayments() {
         console.error("Error loading patients:", patientsError);
       }
 
-      // Carregar sessões
-      const { data: sessionsData, error: sessionsError } = await supabase
-        .from("sessions")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("session_date", { ascending: false });
-
-      if (sessionsError) {
-        console.error("Error loading sessions:", sessionsError);
-      }
-
       // Carregar pagamentos com dados do paciente e sessão
       // Primeiro carregar os pagamentos
       const { data: paymentsData, error: paymentsError } = await supabase
@@ -128,28 +122,18 @@ export function PatientPayments() {
         // Depois carregar os dados relacionados e fazer merge manual
         if (paymentsData && paymentsData.length > 0) {
           const patientIds = [...new Set(paymentsData.map(p => p.patient_id))];
-          const sessionIds = [...new Set(paymentsData.map(p => p.session_id).filter(Boolean))];
           
-          const [patientsForPayments, sessionsForPayments] = await Promise.all([
+          const [patientsForPayments] = await Promise.all([
             supabase
               .from("patients")
               .select("id, name, email, phone")
-              .in("id", patientIds),
-            sessionIds.length > 0 
-              ? supabase
-                  .from("sessions")
-                  .select("id, session_date, session_type")
-                  .in("id", sessionIds)
-              : Promise.resolve({ data: [] })
+              .in("id", patientIds)
           ]);
 
           // Fazer merge manual dos dados
           const paymentsWithRelations = paymentsData.map(payment => ({
             ...payment,
-            patient: patientsForPayments.data?.find(p => p.id === payment.patient_id) || null,
-            session: payment.session_id 
-              ? sessionsForPayments.data?.find(s => s.id === payment.session_id) || null 
-              : null
+            patient: patientsForPayments.data?.find(p => p.id === payment.patient_id) || null
           }));
 
           setPayments(paymentsWithRelations);
@@ -187,11 +171,43 @@ export function PatientPayments() {
       console.error("Error loading data:", error);
       setPayments([]);
       setPatients([]);
-      setSessions([]);
       setAccounts([]);
       setCategories([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateRecurringPayments = async (paymentData: any, formData: PatientPaymentForm) => {
+    try {
+      if (!formData.is_recurring || !formData.recurring_frequency) return;
+
+      const startDate = new Date(formData.payment_date);
+      const endDate = formData.recurring_until ? new Date(formData.recurring_until) : addMonths(startDate, 12);
+      const payments = [];
+      let currentDate = new Date(startDate);
+
+      // Gerar pagamentos recorrentes
+      while (currentDate <= endDate) {
+        if (formData.recurring_frequency === "monthly") {
+          currentDate = addMonths(currentDate, 1);
+        } else if (formData.recurring_frequency === "weekly") {
+          currentDate = addWeeks(currentDate, 1);
+        }
+
+        if (currentDate <= endDate) {
+          payments.push({
+            ...paymentData,
+            payment_date: format(currentDate, "yyyy-MM-dd"),
+            parent_payment_id: null, // Será definido após inserir o pagamento pai
+          });
+        }
+      }
+
+      return payments;
+    } catch (error) {
+      console.error("Error generating recurring payments:", error);
+      return [];
     }
   };
 
@@ -248,6 +264,9 @@ export function PatientPayments() {
         payment_method: data.payment_method,
         description: data.description || null,
         status: data.status,
+        is_recurring: data.is_recurring,
+        recurring_frequency: data.is_recurring ? data.recurring_frequency : null,
+        recurring_until: data.is_recurring ? data.recurring_until : null,
       };
 
       let paymentId: string;
@@ -270,6 +289,25 @@ export function PatientPayments() {
 
         if (error) throw error;
         paymentId = newPayment.id;
+
+        // Gerar pagamentos recorrentes se necessário
+        if (data.is_recurring) {
+          const recurringPayments = await generateRecurringPayments(paymentData, data);
+          if (recurringPayments.length > 0) {
+            const paymentsWithParent = recurringPayments.map(payment => ({
+              ...payment,
+              parent_payment_id: paymentId,
+            }));
+
+            const { error: recurringError } = await supabase
+              .from("patient_payments")
+              .insert(paymentsWithParent);
+
+            if (recurringError) {
+              console.error("Error creating recurring payments:", recurringError);
+            }
+          }
+        }
       }
 
       // Criar transação financeira se solicitado
@@ -331,6 +369,9 @@ export function PatientPayments() {
     setValue("payment_method", payment.payment_method);
     setValue("description", payment.description || "");
     setValue("status", payment.status);
+    setValue("is_recurring", payment.is_recurring || false);
+    setValue("recurring_frequency", payment.recurring_frequency || "monthly");
+    setValue("recurring_until", payment.recurring_until || "");
     setValue("create_transaction", false);
     setIsModalOpen(true);
   };
@@ -434,7 +475,29 @@ export function PatientPayments() {
     setValue("status", "pending");
     setValue("payment_method", "cash");
     setValue("create_transaction", true);
+    setValue("is_recurring", false);
+    setValue("recurring_frequency", "monthly");
     setIsModalOpen(true);
+  };
+
+  const getMonthlyPayments = () => {
+    const monthStart = startOfMonth(currentMonth);
+    const monthEnd = endOfMonth(currentMonth);
+    
+    return payments.filter(payment => {
+      const paymentDate = new Date(payment.payment_date);
+      return paymentDate >= monthStart && paymentDate <= monthEnd;
+    });
+  };
+
+  const getMonthlyStats = () => {
+    const monthlyPayments = getMonthlyPayments();
+    const total = monthlyPayments.reduce((sum, payment) => sum + payment.amount, 0);
+    const paid = monthlyPayments.filter(p => p.status === 'paid').reduce((sum, payment) => sum + payment.amount, 0);
+    const pending = monthlyPayments.filter(p => p.status === 'pending').reduce((sum, payment) => sum + payment.amount, 0);
+    const overdue = monthlyPayments.filter(p => p.status === 'overdue').reduce((sum, payment) => sum + payment.amount, 0);
+    
+    return { total, paid, pending, overdue, count: monthlyPayments.length };
   };
 
   const getStatusColor = (status: PatientPayment["status"]) => {
@@ -489,7 +552,7 @@ export function PatientPayments() {
     }).format(value);
   };
 
-  const filteredPayments = payments.filter((payment) => {
+  const filteredPayments = (viewMode === "monthly" ? getMonthlyPayments() : payments).filter((payment) => {
     const matchesSearch =
       (payment.patient?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (payment.description &&
@@ -500,9 +563,7 @@ export function PatientPayments() {
     return matchesSearch && matchesStatus && matchesPatient;
   });
 
-  const patientSessions = sessions.filter(
-    (session) => session.patient_id === watchPatientId,
-  );
+  const monthlyStats = getMonthlyStats();
 
   if (loading) {
     return (
@@ -535,14 +596,110 @@ export function PatientPayments() {
           </p>
         </div>
 
-        <button
-          onClick={openModal}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Novo Pagamento</span>
-        </button>
+        <div className="flex space-x-3">
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                viewMode === "list"
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              <span>Lista</span>
+            </button>
+            <button
+              onClick={() => setViewMode("monthly")}
+              className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                viewMode === "monthly"
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Mensal</span>
+            </button>
+          </div>
+          <button
+            onClick={openModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Novo Pagamento</span>
+          </button>
+        </div>
       </div>
+
+      {/* Visão Mensal */}
+      {viewMode === "monthly" && (
+        <div className="mb-6">
+          {/* Navegação do Mês */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => setCurrentMonth(addMonths(currentMonth, -1))}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <h2 className="text-xl font-semibold text-gray-900">
+                {format(currentMonth, "MMMM 'de' yyyy", { locale: ptBR })}
+              </h2>
+              <button
+                onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Estatísticas do Mês */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-center space-x-2 mb-2">
+                  <DollarSign className="w-5 h-5 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-900">Total</span>
+                </div>
+                <p className="text-2xl font-bold text-blue-700">
+                  {formatCurrency(monthlyStats.total)}
+                </p>
+                <p className="text-sm text-blue-600">{monthlyStats.count} pagamentos</p>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="flex items-center space-x-2 mb-2">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <span className="text-sm font-medium text-green-900">Recebido</span>
+                </div>
+                <p className="text-2xl font-bold text-green-700">
+                  {formatCurrency(monthlyStats.paid)}
+                </p>
+              </div>
+
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Clock className="w-5 h-5 text-yellow-600" />
+                  <span className="text-sm font-medium text-yellow-900">Pendente</span>
+                </div>
+                <p className="text-2xl font-bold text-yellow-700">
+                  {formatCurrency(monthlyStats.pending)}
+                </p>
+              </div>
+
+              <div className="bg-red-50 p-4 rounded-lg">
+                <div className="flex items-center space-x-2 mb-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  <span className="text-sm font-medium text-red-900">Atrasado</span>
+                </div>
+                <p className="text-2xl font-bold text-red-700">
+                  {formatCurrency(monthlyStats.overdue)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
@@ -633,6 +790,12 @@ export function PatientPayments() {
                         >
                           {getStatusLabel(payment.status)}
                         </span>
+                        {payment.is_recurring && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <Repeat className="w-3 h-3 mr-1" />
+                            Recorrente
+                          </span>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
@@ -666,15 +829,17 @@ export function PatientPayments() {
                         </div>
                       )}
 
-                      {payment.session && (
+                      {payment.is_recurring && (
                         <div className="mt-2 text-sm text-gray-500">
-                          Sessão:{" "}
-                          {format(
-                            new Date(payment.session.session_date),
-                            "dd/MM/yyyy",
-                            { locale: ptBR },
-                          )}{" "}
-                          - {payment.session.session_type}
+                          <div className="flex items-center space-x-2">
+                            <Repeat className="w-4 h-4" />
+                            <span>
+                              {payment.recurring_frequency === "monthly" ? "Mensal" : "Semanal"}
+                              {payment.recurring_until && (
+                                <span> até {format(new Date(payment.recurring_until), "dd/MM/yyyy", { locale: ptBR })}</span>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -891,6 +1056,53 @@ export function PatientPayments() {
                   />
                 </div>
 
+                {/* Recorrência */}
+                <div className="md:col-span-2 border-t pt-4">
+                  <h3 className="text-lg font-medium text-gray-900 mb-3">
+                    Recorrência
+                  </h3>
+
+                  <div className="space-y-4">
+                    <label className="flex items-center">
+                      <input
+                        {...register("is_recurring")}
+                        type="checkbox"
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">
+                        Pagamento recorrente
+                      </span>
+                    </label>
+
+                    {watchIsRecurring && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Frequência
+                          </label>
+                          <select
+                            {...register("recurring_frequency")}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="weekly">Semanal</option>
+                            <option value="monthly">Mensal</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Até (opcional)
+                          </label>
+                          <input
+                            {...register("recurring_until")}
+                            type="date"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Integração com sistema financeiro */}
                 <div className="md:col-span-2 border-t pt-4">
                   <h3 className="text-lg font-medium text-gray-900 mb-3">
@@ -1013,6 +1225,12 @@ export function PatientPayments() {
                     {getStatusLabel(viewingPayment.status)}
                   </span>
                 </div>
+                    {viewingPayment.is_recurring && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                        <Repeat className="w-3 h-3 mr-1" />
+                        Recorrente
+                      </span>
+                    )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1038,6 +1256,18 @@ export function PatientPayments() {
                       {viewingPayment.payment_method}
                     </span>
                   </div>
+
+                  {viewingPayment.is_recurring && (
+                    <div className="flex items-center space-x-3">
+                      <Repeat className="w-5 h-5 text-gray-400" />
+                      <span className="text-gray-700">
+                        {viewingPayment.recurring_frequency === "monthly" ? "Mensal" : "Semanal"}
+                        {viewingPayment.recurring_until && (
+                          <span> até {format(new Date(viewingPayment.recurring_until), "dd/MM/yyyy", { locale: ptBR })}</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">
@@ -1061,24 +1291,6 @@ export function PatientPayments() {
                   )}
                 </div>
               </div>
-
-              {viewingPayment.session && (
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">
-                    Sessão Relacionada
-                  </h4>
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-gray-700">
-                      {format(
-                        new Date(viewingPayment.session.session_date),
-                        "dd/MM/yyyy HH:mm",
-                        { locale: ptBR },
-                      )}{" "}
-                      - {viewingPayment.session.session_type}
-                    </p>
-                  </div>
-                </div>
-              )}
 
               {viewingPayment.description && (
                 <div>
