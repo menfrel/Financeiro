@@ -43,6 +43,11 @@ export interface PatientPayment {
   description?: string;
   status: "pending" | "paid" | "overdue" | "cancelled";
   transaction_id?: string;
+  is_recurring: boolean;
+  recurring_frequency?: "weekly" | "monthly" | null;
+  recurring_until?: string | null;
+  recurring_day?: number | null;
+  parent_payment_id?: string | null;
   created_at: string;
   updated_at: string;
   patient?: Patient;
@@ -83,4 +88,8 @@ export interface PatientPaymentForm {
   status: "pending" | "paid" | "overdue" | "cancelled";
   account_id?: string;
   create_transaction: boolean;
+  is_recurring: boolean;
+  recurring_frequency?: "weekly" | "monthly";
+  recurring_until?: string;
+  recurring_day?: number;
 }

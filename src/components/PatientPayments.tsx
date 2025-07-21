@@ -26,6 +26,8 @@ import {
   Patient,
   Session,
 } from "../types/patients";
+import { RecurringPaymentGenerator } from "../utils/recurringPayments";
+import { PaymentCalendar } from "./PaymentCalendar";
 
 interface Account {
   id: string;
@@ -62,6 +64,7 @@ export function PatientPayments() {
   const [patientFilter, setPatientFilter] = useState<string>("");
 
   const {
+  const [calendarView, setCalendarView] = useState<"list" | "calendar">("list");
     register,
     handleSubmit,
     reset,
@@ -76,6 +79,8 @@ export function PatientPayments() {
   useEffect(() => {
     if (user) {
       loadData();
+      // Inicializar geração de pagamentos recorrentes
+      RecurringPaymentGenerator.initializeRecurringPayments(user.id);
     }
   }, [user]);
 
@@ -588,7 +593,13 @@ export function PatientPayments() {
       </div>
 
       {/* Lista de Pagamentos */}
-      {filteredPayments.length === 0 ? (
+      {viewMode === "monthly" && calendarView === "calendar" ? (
+        <PaymentCalendar
+          payments={getMonthlyPayments()}
+          currentMonth={currentMonth}
+          onPaymentClick={handleView}
+        />
+      ) : filteredPayments.length === 0 ? (
         <div className="text-center py-12">
           <DollarSign className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
