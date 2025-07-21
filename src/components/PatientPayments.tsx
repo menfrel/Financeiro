@@ -63,8 +63,9 @@ export function PatientPayments() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [patientFilter, setPatientFilter] = useState<string>("");
 
-  const {
   const [calendarView, setCalendarView] = useState<"list" | "calendar">("list");
+
+  const {
     register,
     handleSubmit,
     reset,
