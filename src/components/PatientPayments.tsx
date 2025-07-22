@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
 import {
+import { PaymentCalendar } from "./PaymentCalendar";
   Plus,
   Search,
   DollarSign,
@@ -16,6 +17,7 @@ import {
   Trash2,
   Eye,
   Filter,
+  Repeat,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format } from "date-fns";
@@ -60,6 +62,19 @@ export function PatientPayments() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [patientFilter, setPatientFilter] = useState<string>("");
+
+  // Navegação do calendário
+  const goToPreviousMonth = () => {
+    setCurrentMonth(prev => subMonths(prev, 1));
+  };
+
+  const goToNextMonth = () => {
+    setCurrentMonth(prev => addMonths(prev, 1));
+  };
+
+  const goToCurrentMonth = () => {
+    setCurrentMonth(new Date());
+  };
 
   const {
     register,
@@ -562,6 +577,35 @@ export function PatientPayments() {
       {/* Filtros */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
         <div className="flex items-center space-x-2 mb-4">
+          {/* Toggle Lista/Calendário */}
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-600">Visualização:</span>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setCalendarView("list")}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                  calendarView === "list"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <List className="w-4 h-4" />
+                <span>Lista</span>
+              </button>
+              <button
+                onClick={() => setCalendarView("calendar")}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                  calendarView === "calendar"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Calendário</span>
+              </button>
+            </div>
+          </div>
+
           <Filter className="w-5 h-5 text-gray-600" />
           <span className="font-medium text-gray-900">Filtros e Busca</span>
         </div>
@@ -602,67 +646,68 @@ export function PatientPayments() {
         </div>
       </div>
 
-      {/* Lista de Pagamentos */}
-      {filteredPayments.length === 0 ? (
-        <div className="text-center py-12">
-          <DollarSign className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm || statusFilter || patientFilter
-              ? "Nenhum pagamento encontrado"
-              : "Nenhum pagamento registrado"}
-          </h3>
-          <p className="text-gray-600 mb-6">
-            {searchTerm || statusFilter || patientFilter
-              ? "Tente ajustar os filtros de busca"
-              : "Registre seu primeiro pagamento para começar"}
-          </p>
-          <button
-            onClick={openModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
-          >
-            Registrar Pagamento
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredPayments.map((payment) => {
-            const paymentDate = new Date(payment.payment_date);
-
-            return (
+      {/* Conteúdo Principal - Lista ou Calendário */}
+      {calendarView === "list" ? (
+        /* Lista de Pagamentos */
+        filteredPayments.length === 0 ? (
+          <div className="text-center py-12">
+            <DollarSign className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {searchTerm || statusFilter || patientFilter
+                ? "Nenhum pagamento encontrado"
+                : "Nenhum pagamento cadastrado"}
+            </h3>
+            <p className="text-gray-600 mb-6">
+              {searchTerm || statusFilter || patientFilter
+                ? "Tente ajustar os filtros de busca"
+                : "Cadastre o primeiro pagamento para começar"}
+            </p>
+            <button
+              onClick={openModal}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
+            >
+              Cadastrar Pagamento
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredPayments.map((payment) => (
               <div
                 key={payment.id}
                 className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start space-x-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center text-white">
+                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
                       {getStatusIcon(payment.status)}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
                         <h3 className="font-semibold text-gray-900">
-                          {payment.patient?.name || 'Paciente não encontrado'}
+                          {payment.patient?.name || "Paciente não encontrado"}
                         </h3>
                         <span
                           className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(payment.status)}`}
                         >
                           {getStatusLabel(payment.status)}
                         </span>
+                        {payment.is_recurring && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <Repeat className="w-3 h-3 mr-1" />
+                            Recorrente
+                          </span>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
                         <div className="flex items-center space-x-2">
-                          <DollarSign className="w-4 h-4" />
-                          <span className="font-medium text-lg text-gray-900">
-                            {formatCurrency(payment.amount)}
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2">
                           <Calendar className="w-4 h-4" />
                           <span>
-                            {format(paymentDate, "dd/MM/yyyy", {
-                              locale: ptBR,
-                            })}
+                            {format(
+                              new Date(payment.payment_date),
+                              "dd/MM/yyyy",
+                              { locale: ptBR },
+                            )}
                           </span>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -671,6 +716,18 @@ export function PatientPayments() {
                             {payment.payment_method}
                           </span>
                         </div>
+                        {payment.session && (
+                          <div className="flex items-center space-x-2">
+                            <User className="w-4 h-4" />
+                            <span>
+                              Sessão: {format(
+                                new Date(payment.session.session_date),
+                                "dd/MM/yyyy",
+                                { locale: ptBR },
+                              )}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {payment.description && (
@@ -680,55 +737,87 @@ export function PatientPayments() {
                           </p>
                         </div>
                       )}
-
-                      {payment.session && (
-                        <div className="mt-2 text-sm text-gray-500">
-                          Sessão:{" "}
-                          {format(
-                            new Date(payment.session.session_date),
-                            "dd/MM/yyyy",
-                            { locale: ptBR },
-                          )}{" "}
-                          - {payment.session.session_type}
-                        </div>
-                      )}
                     </div>
                   </div>
 
-                  <div className="flex space-x-1">
-                    <button
-                      onClick={() => handleView(payment)}
-                      className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Visualizar"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleEdit(payment)}
-                      className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Editar"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(payment.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                      title="Excluir"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  <div className="flex items-center space-x-4">
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-gray-900">
+                        {formatCurrency(payment.amount)}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {payment.payment_method}
+                      </p>
+                    </div>
+
+                    <div className="flex space-x-1">
+                      <button
+                        onClick={() => handleView(payment)}
+                        className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Visualizar"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleEdit(payment)}
+                        className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Editar"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(payment.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Ações rápidas */}
                 <div className="flex space-x-2 mt-4 pt-4 border-t border-gray-100">
                   {payment.status === "pending" && (
-                    <>
-                      <button
-                        onClick={() => handleStatusChange(payment.id, "paid")}
-                        className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-lg text-sm transition-colors flex items-center space-x-1"
-                      >
-                        <CheckCircle className="w-4 h-4" />
+                    <button
+                      onClick={() => handleStatusChange(payment.id, "paid")}
+                      className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-lg text-sm transition-colors flex items-center space-x-1"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Marcar como Pago</span>
+                    </button>
+                  )}
+                  {payment.status === "paid" && (
+                    <button
+                      onClick={() => handleStatusChange(payment.id, "pending")}
+                      className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-2 rounded-lg text-sm transition-colors flex items-center space-x-1"
+                    >
+                      <Clock className="w-4 h-4" />
+                      <span>Marcar como Pendente</span>
+                    </button>
+                  )}
+                  {payment.status !== "cancelled" && (
+                    <button
+                      onClick={() => handleStatusChange(payment.id, "cancelled")}
+                      className="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded-lg text-sm transition-colors flex items-center space-x-1"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      <span>Cancelar</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        /* Visualização de Calendário */
+        <PaymentCalendar
+          payments={filteredPayments}
+          currentMonth={currentMonth}
+          onPaymentClick={handleView}
+        />
+      )}
                         <span>Marcar como Pago</span>
                       </button>
                       <button
@@ -1285,6 +1374,231 @@ export function PatientPayments() {
                   </p>
                 )}
               </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {submitting
+                    ? "Salvando..."
+                    : editingPayment
+                      ? "Atualizar"
+                      : "Cadastrar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Visualização */}
+      {isViewModalOpen && viewingPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Detalhes do Pagamento
+              </h2>
+              <button
+                onClick={() => setIsViewModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                  {getStatusIcon(viewingPayment.status)}
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">
+                    {viewingPayment.patient?.name}
+                  </h3>
+                  <span
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(viewingPayment.status)}`}
+                  >
+                    {getStatusLabel(viewingPayment.status)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-900">
+                    Informações do Pagamento
+                  </h4>
+
+                  <div className="flex items-center space-x-3">
+                    <DollarSign className="w-5 h-5 text-gray-400" />
+                    <span className="text-gray-700">
+                      {formatCurrency(viewingPayment.amount)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="w-5 h-5 text-gray-400" />
+                    <span className="text-gray-700">
+                      {format(
+                        new Date(viewingPayment.payment_date),
+                        "dd/MM/yyyy",
+                        { locale: ptBR },
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    <CreditCard className="w-5 h-5 text-gray-400" />
+                    <span className="text-gray-700 capitalize">
+                      {viewingPayment.payment_method}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-900">
+                    Sessão Relacionada
+                  </h4>
+
+                  {viewingPayment.session ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-3">
+                        <Calendar className="w-5 h-5 text-gray-400" />
+                        <span className="text-gray-700">
+                          {format(
+                            new Date(viewingPayment.session.session_date),
+                            "dd/MM/yyyy HH:mm",
+                            { locale: ptBR },
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Clock className="w-5 h-5 text-gray-400" />
+                        <span className="text-gray-700">
+                          {viewingPayment.session.duration_minutes || 50} minutos
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <User className="w-5 h-5 text-gray-400" />
+                        <span className="text-gray-700 capitalize">
+                          {viewingPayment.session.session_type}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 italic">Nenhuma sessão vinculada</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Informações de Recorrência */}
+              {viewingPayment.is_recurring && (
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center space-x-2">
+                    <Repeat className="w-5 h-5" />
+                    <span>Configuração de Recorrência</span>
+                  </h4>
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium text-blue-900">Frequência:</span>
+                        <p className="text-blue-800 capitalize">
+                          {viewingPayment.recurring_frequency === "weekly" ? "Semanal" : "Mensal"}
+                        </p>
+                      </div>
+                      {viewingPayment.recurring_day && (
+                        <div>
+                          <span className="font-medium text-blue-900">Dia:</span>
+                          <p className="text-blue-800">
+                            Todo dia {viewingPayment.recurring_day}
+                          </p>
+                        </div>
+                      )}
+                      {viewingPayment.recurring_until && (
+                        <div>
+                          <span className="font-medium text-blue-900">Até:</span>
+                          <p className="text-blue-800">
+                            {format(
+                              new Date(viewingPayment.recurring_until),
+                              "dd/MM/yyyy",
+                              { locale: ptBR },
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {viewingPayment.description && (
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2">
+                    Descrição
+                  </h4>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {viewingPayment.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-sm text-gray-500 pt-4 border-t border-gray-200">
+                <p>
+                  Criado em:{" "}
+                  {format(
+                    new Date(viewingPayment.created_at),
+                    "dd/MM/yyyy 'às' HH:mm",
+                    { locale: ptBR },
+                  )}
+                </p>
+                {viewingPayment.updated_at !== viewingPayment.created_at && (
+                  <p>
+                    Última atualização:{" "}
+                    {format(
+                      new Date(viewingPayment.updated_at),
+                      "dd/MM/yyyy 'às' HH:mm",
+                      { locale: ptBR },
+                    )}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex space-x-3 pt-6">
+              <button
+                onClick={() => {
+                  setIsViewModalOpen(false);
+                  handleEdit(viewingPayment);
+                }}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Editar Pagamento
+              </button>
+              <button
+                onClick={() => setIsViewModalOpen(false)}
+                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
             </div>
 
             <div className="flex space-x-3 pt-6">
