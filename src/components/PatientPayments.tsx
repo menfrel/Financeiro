@@ -106,10 +106,14 @@ export function PatientPayments() {
         .from("sessions")
         .select("*")
         .eq("user_id", user.id)
-        .order("session_date", { ascending: false });
+        .order("session_date", { ascending: false })
+        .limit(100); // Limitar para performance
 
       if (sessionsError) {
         console.error("Error loading sessions:", sessionsError);
+        setSessions([]);
+      } else {
+        setSessions(sessionsData || []);
       }
 
       // Carregar pagamentos com dados do paciente e sessão
@@ -183,6 +187,13 @@ export function PatientPayments() {
       setPatients(patientsData || []);
       setAccounts(accountsData || []);
       setCategories(categoriesData || []);
+      
+      console.log("Dados carregados:", {
+        patients: patientsData?.length || 0,
+        sessions: sessionsData?.length || 0,
+        payments: paymentsData?.length || 0,
+        accounts: accountsData?.length || 0
+      });
     } catch (error) {
       console.error("Error loading data:", error);
       setPayments([]);
@@ -770,7 +781,7 @@ export function PatientPayments() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Paciente *
+                    Paciente * {patients.length === 0 && <span className="text-red-500">(Nenhum paciente ativo encontrado)</span>}
                   </label>
                   <select
                     {...register("patient_id", {
@@ -788,6 +799,35 @@ export function PatientPayments() {
                   {errors.patient_id && (
                     <p className="text-red-600 text-sm mt-1">
                       {errors.patient_id.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Sessão Relacionada (Opcional)
+                    {watchPatientId && patientSessions.length === 0 && (
+                      <span className="text-amber-600 text-sm ml-2">
+                        (Nenhuma sessão encontrada para este paciente)
+                      </span>
+                    )}
+                  </label>
+                  <select
+                    {...register("session_id")}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={!watchPatientId}
+                  >
+                    <option value="">Nenhuma sessão específica</option>
+                    {patientSessions.map((session) => (
+                      <option key={session.id} value={session.id}>
+                        {format(new Date(session.session_date), "dd/MM/yyyy HH:mm", { locale: ptBR })} - {session.session_type}
+                        {session.status && ` (${session.status})`}
+                      </option>
+                    ))}
+                  </select>
+                  {!watchPatientId && (
+                    <p className="text-gray-500 text-sm mt-1">
+                      Selecione um paciente primeiro para ver as sessões disponíveis
                     </p>
                   )}
                 </div>
@@ -891,8 +931,94 @@ export function PatientPayments() {
                     {...register("description")}
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Descrição adicional do pagamento"
+                    placeholder="Ex: Consulta de retorno, Sessão de terapia, Procedimento específico..."
                   />
+                </div>
+
+                {/* Seção de Recorrência */}
+                <div className="md:col-span-2 border-t pt-4">
+                  <h3 className="text-lg font-medium text-gray-900 mb-3">
+                    Configuração de Recorrência
+                  </h3>
+
+                  <div className="space-y-4">
+                    <label className="flex items-center">
+                      <input
+                        {...register("is_recurring")}
+                        type="checkbox"
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">
+                        Pagamento recorrente (gerar automaticamente nos próximos meses)
+                      </span>
+                    </label>
+
+                    {watch("is_recurring") && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Frequência *
+                          </label>
+                          <select
+                            {...register("recurring_frequency", {
+                              required: watch("is_recurring") ? "Frequência é obrigatória" : false,
+                            })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Selecione</option>
+                            <option value="weekly">Semanal</option>
+                            <option value="monthly">Mensal</option>
+                          </select>
+                          {errors.recurring_frequency && (
+                            <p className="text-red-600 text-sm mt-1">
+                              {errors.recurring_frequency.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Dia do Pagamento *
+                          </label>
+                          <input
+                            {...register("recurring_day", {
+                              required: watch("is_recurring") ? "Dia é obrigatório" : false,
+                              valueAsNumber: true,
+                              min: { value: 1, message: "Dia deve ser entre 1 e 31" },
+                              max: { value: 31, message: "Dia deve ser entre 1 e 31" },
+                            })}
+                            type="number"
+                            min="1"
+                            max="31"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Ex: 5"
+                          />
+                          {errors.recurring_day && (
+                            <p className="text-red-600 text-sm mt-1">
+                              {errors.recurring_day.message}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            Dia do mês para pagamento recorrente
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Recorrer Até (Opcional)
+                          </label>
+                          <input
+                            {...register("recurring_until")}
+                            type="date"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Deixe vazio para recorrência indefinida
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Integração com sistema financeiro */}
@@ -1072,14 +1198,56 @@ export function PatientPayments() {
                     Sessão Relacionada
                   </h4>
                   <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-gray-700">
-                      {format(
-                        new Date(viewingPayment.session.session_date),
-                        "dd/MM/yyyy HH:mm",
-                        { locale: ptBR },
-                      )}{" "}
-                      - {viewingPayment.session.session_type}
-                    </p>
+                    <div className="flex items-center space-x-3">
+                      <Calendar className="w-5 h-5 text-blue-600" />
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {format(
+                            new Date(viewingPayment.session.session_date + 'Z'),
+                            "dd/MM/yyyy 'às' HH:mm",
+                            { locale: ptBR },
+                          )}
+                        </p>
+                        <p className="text-sm text-gray-600 capitalize">
+                          {viewingPayment.session.session_type}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Informações de Recorrência */}
+              {viewingPayment.is_recurring && (
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2">
+                    Configuração de Recorrência
+                  </h4>
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-purple-900">Frequência:</p>
+                        <p className="text-purple-800 capitalize">
+                          {viewingPayment.recurring_frequency === 'weekly' ? 'Semanal' : 'Mensal'}
+                        </p>
+                      </div>
+                      {viewingPayment.recurring_day && (
+                        <div>
+                          <p className="text-sm font-medium text-purple-900">Dia do Pagamento:</p>
+                          <p className="text-purple-800">
+                            Dia {viewingPayment.recurring_day}
+                          </p>
+                        </div>
+                      )}
+                      {viewingPayment.recurring_until && (
+                        <div className="md:col-span-2">
+                          <p className="text-sm font-medium text-purple-900">Recorre até:</p>
+                          <p className="text-purple-800">
+                            {format(new Date(viewingPayment.recurring_until), "dd/MM/yyyy", { locale: ptBR })}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
