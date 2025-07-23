@@ -42,7 +42,7 @@ export class RecurringPaymentGenerator {
       const paymentsToCreate = [];
 
       for (const payment of recurringPayments) {
-        const nextPayments = this.calculateNextPayments(payment, today, futureLimit);
+        const nextPayments = await this.calculateNextPayments(payment, today, futureLimit);
         paymentsToCreate.push(...nextPayments);
       }
 
@@ -63,7 +63,7 @@ export class RecurringPaymentGenerator {
     }
   }
 
-  private static calculateNextPayments(payment: RecurringPayment, today: Date, futureLimit: Date) {
+  private static async calculateNextPayments(payment: RecurringPayment, today: Date, futureLimit: Date) {
     const paymentsToCreate = [];
     const lastPaymentDate = new Date(payment.payment_date);
     const recurringUntil = payment.recurring_until ? new Date(payment.recurring_until) : null;
