@@ -16,6 +16,45 @@ interface RecurringPayment {
 }
 
 export class RecurringPaymentGenerator {
+  // Método para gerar pagamentos recorrentes para um único pagamento
+  static async generateRecurringPaymentsForSingle(payment: any) {
+    try {
+      console.log('Generating recurring payments for single payment:', payment.id);
+      
+      if (!payment.is_recurring) {
+        console.log('Payment is not recurring, skipping');
+        return;
+      }
+
+      const today = startOfDay(new Date());
+      const futureLimit = addMonths(today, 6); // Gerar até 6 meses no futuro
+      const paymentsToCreate = [];
+
+      const nextPayments = await this.calculateNextPayments(payment, today, futureLimit);
+      paymentsToCreate.push(...nextPayments);
+
+      // Criar os pagamentos em lote
+      if (paymentsToCreate.length > 0) {
+        console.log(`Creating ${paymentsToCreate.length} recurring payments for payment ${payment.id}`);
+        const { error: insertError } = await supabase
+          .from('patient_payments')
+          .insert(paymentsToCreate);
+
+        if (insertError) {
+          console.error('Error creating recurring payments:', insertError);
+          throw insertError;
+        } else {
+          console.log(`Successfully created ${paymentsToCreate.length} recurring payments`);
+        }
+      } else {
+        console.log('No recurring payments to create');
+      }
+    } catch (error) {
+      console.error('Error in generateRecurringPaymentsForSingle:', error);
+      throw error;
+    }
+  }
+
   static async generateRecurringPayments(userId: string) {
     try {
       console.log('Generating recurring payments for user:', userId);
@@ -35,6 +74,7 @@ export class RecurringPaymentGenerator {
       }
 
       if (!recurringPayments || recurringPayments.length === 0) {
+        console.log('No recurring payments found');
         return;
       }
 

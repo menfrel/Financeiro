@@ -221,11 +221,23 @@ export function PatientPayments() {
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { data: newPayment, error } = await supabase
           .from('patient_payments')
-          .insert([paymentData]);
+          .insert([paymentData])
+          .select()
+          .single();
 
         if (error) throw error;
+
+        // Se é recorrente, gerar pagamentos futuros automaticamente
+        if (data.is_recurring && newPayment) {
+          try {
+            await RecurringPaymentGenerator.generateRecurringPaymentsForSingle(newPayment);
+          } catch (recurringError) {
+            console.error('Error generating recurring payments:', recurringError);
+            // Não falhar a criação do pagamento principal por causa dos recorrentes
+          }
+        }
       }
 
       await loadPayments();
