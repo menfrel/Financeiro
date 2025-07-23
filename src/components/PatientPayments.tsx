@@ -160,7 +160,6 @@ export function PatientPayments() {
       console.error('Error generating recurring payments:', error);
     }
   };
-
   const loadPatients = async () => {
     try {
       const { data, error } = await supabase
@@ -525,13 +524,6 @@ export function PatientPayments() {
         >
           <Plus className="w-4 h-4" />
           <span>Novo Pagamento</span>
-        </button>
-        <button
-          onClick={generateRecurringPayments}
-          className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <Repeat className="w-4 h-4" />
-          <span>Gerar Recorrentes</span>
         </button>
       </div>
 
