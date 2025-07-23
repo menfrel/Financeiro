@@ -128,17 +128,21 @@ export function Transactions() {
       }
 
       // Load transactions - garantir isolamento por usuário
-      const { data: transactionsData } = await supabase
+      const { data: transactionsData, error: transactionsError } = await supabase
         .from("transactions")
         .select(
           `
           *,
-          accounts!inner (id, name),
-          categories!inner (id, name, color)
+          accounts (id, name),
+          categories (id, name, color)
         `,
         )
         .eq("user_id", user.id)
         .order("date", { ascending: false });
+
+      if (transactionsError) {
+        console.error("Error loading transactions:", transactionsError);
+      }
 
       // Load accounts - garantir isolamento por usuário
       const { data: accountsData } = await supabase
@@ -160,6 +164,8 @@ export function Transactions() {
         (transaction) => ({
           ...transaction,
           amount: parseFloat(transaction.amount) || 0,
+          account: transaction.accounts || null,
+          category: transaction.categories || null,
         }),
       );
 
