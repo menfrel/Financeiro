@@ -549,129 +549,148 @@ export function PatientPayments() {
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {filteredPayments.map((payment) => (
-              <div
-                key={payment.id}
-                className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                      <User className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="font-semibold text-gray-900">
-                          {payment.patient?.name || 'Paciente não encontrado'}
-                        </h3>
-                        <span
-                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(payment.status)}`}
-                        >
-                          {getStatusIcon(payment.status)}
-                          <span className="ml-1">{getStatusLabel(payment.status)}</span>
-                        </span>
-                        {payment.is_recurring && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            <Repeat className="w-3 h-3 mr-1" />
-                            Recorrente
-                          </span>
-                        )}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-6 border-b border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Todos os Pagamentos
+              </h3>
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {filteredPayments
+                .sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime())
+                .map((payment) => {
+                  const today = new Date();
+                  const paymentDate = new Date(payment.payment_date + 'T00:00:00');
+                  const isOverdue = payment.status === 'pending' && today > paymentDate;
+
+                  return (
+                    <div
+                      key={payment.id}
+                      className="p-6 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                            <User className="w-6 h-6 text-white" />
+                          </div>
+                          
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <h4 className="font-semibold text-gray-900">
+                                {payment.patient?.name || 'Paciente não encontrado'}
+                              </h4>
+                              <span
+                                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
+                                  isOverdue ? 'bg-red-100 text-red-800 border-red-200' : getStatusColor(payment.status)
+                                }`}
+                              >
+                                {isOverdue ? <AlertTriangle className="w-3 h-3 mr-1" /> : getStatusIcon(payment.status)}
+                                {isOverdue ? 'Atrasado' : getStatusLabel(payment.status)}
+                              </span>
+                              {payment.is_recurring && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  <Repeat className="w-3 h-3 mr-1" />
+                                  Recorrente
+                                </span>
+                              )}
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                              <div className="flex items-center space-x-2">
+                                <Calendar className="w-4 h-4" />
+                                <span>{formatDate(payment.payment_date)}</span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <DollarSign className="w-4 h-4" />
+                                <span className="font-semibold text-gray-900">
+                                  {formatCurrency(payment.amount)}
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <span className="capitalize">{getPaymentMethodLabel(payment.payment_method)}</span>
+                              </div>
+                            </div>
+
+                            {payment.description && (
+                              <div className="mt-2 p-2 bg-gray-50 rounded-lg">
+                                <p className="text-sm text-gray-700">{payment.description}</p>
+                              </div>
+                            )}
+
+                            {payment.session && (
+                              <div className="mt-2 p-2 bg-blue-50 rounded-lg">
+                                <p className="text-sm text-blue-800">
+                                  <strong>Sessão:</strong> {formatDateTime(payment.session.session_date)} - {payment.session.session_type}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Botões de Ação */}
+                        <div className="flex items-center space-x-2">
+                          {/* Botões de Status */}
+                          {payment.status === 'pending' && (
+                            <button
+                              onClick={() => window.handleMarkAsPaid(payment.id)}
+                              className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              <span>Marcar como Pago</span>
+                            </button>
+                          )}
+
+                          {payment.status === 'pending' && isOverdue && (
+                            <button
+                              onClick={() => window.handleMarkAsOverdue(payment.id)}
+                              className="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
+                            >
+                              <AlertTriangle className="w-4 h-4" />
+                              <span>Marcar Atrasado</span>
+                            </button>
+                          )}
+
+                          {payment.status === 'overdue' && (
+                            <button
+                              onClick={() => window.handleMarkAsPaid(payment.id)}
+                              className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              <span>Marcar como Pago</span>
+                            </button>
+                          )}
+
+                          {/* Botões de Ação Padrão */}
+                          <div className="flex space-x-1">
+                            <button
+                              onClick={() => handleView(payment)}
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Visualizar"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleEdit(payment)}
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Editar"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(payment.id)}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                        <div className="flex items-center space-x-2">
-                          <Calendar className="w-4 h-4" />
-                          <span>{formatDate(payment.payment_date)}</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          {getPaymentMethodIcon(payment.payment_method)}
-                          <span>{getPaymentMethodLabel(payment.payment_method)}</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <DollarSign className="w-4 h-4" />
-                          <span className="font-semibold text-gray-900">
-                            {formatCurrency(payment.amount)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {payment.description && (
-                        <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                          <p className="text-sm text-gray-700">
-                            {payment.description}
-                          </p>
-                        </div>
-                      )}
-
-                      {payment.session && (
-                        <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                          <p className="text-sm text-blue-800">
-                            <strong>Sessão:</strong> {formatDateTime(payment.session.session_date)} - {payment.session.session_type}
-                          </p>
-                        </div>
-                      )}
                     </div>
-                  </div>
-
-                      {/* Botões de Status - Ações Rápidas */}
-                      {payment.status === 'pending' && (
-                        <button
-                          onClick={() => handleMarkAsPaid(payment.id)}
-                          className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                          <span>Pago</span>
-                        </button>
-                      )}
-
-                      {payment.status === 'pending' && new Date() > new Date(payment.payment_date) && (
-                        <button
-                          onClick={() => handleMarkAsOverdue(payment.id)}
-                          className="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
-                        >
-                          <AlertCircle className="w-4 h-4" />
-                          <span>Atrasado</span>
-                        </button>
-                      )}
-
-                      {payment.status === 'overdue' && (
-                        <button
-                          onClick={() => handleMarkAsPaid(payment.id)}
-                          className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                          <span>Pago</span>
-                        </button>
-                      )}
-
-                      {/* Botões de Ação Padrão */}
-                  <div className="flex space-x-1">
-                    <button
-                      onClick={() => handleView(payment)}
-                      className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Visualizar"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleEdit(payment)}
-                      className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Editar"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(payment.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                      title="Excluir"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+                  );
+                })}
+            </div>
           </div>
         )
       ) : (
