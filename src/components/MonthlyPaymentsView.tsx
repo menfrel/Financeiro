@@ -168,6 +168,14 @@ export function MonthlyPaymentsView({
 
   const handleMarkAsPaid = async (paymentId: string) => {
     try {
+      // Buscar o pagamento para criar a transação
+      const payment = payments.find(p => p.id === paymentId);
+      if (!payment) return;
+
+      // Criar transação automaticamente
+      await createTransactionFromPayment(payment);
+
+      // Atualizar status
       const { error } = await supabase
         .from('patient_payments')
         .update({ status: 'paid' })
@@ -178,6 +186,75 @@ export function MonthlyPaymentsView({
       onStatusChange(paymentId, 'paid');
     } catch (error) {
       console.error('Error updating payment status:', error);
+      alert('Erro ao marcar pagamento como pago');
+    }
+  };
+
+  const createTransactionFromPayment = async (payment: any) => {
+    try {
+      // Buscar ou criar categoria para pagamentos de pacientes
+      let { data: category } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('user_id', user?.id)
+        .eq('name', 'Pagamentos de Pacientes')
+        .eq('type', 'income')
+        .single();
+
+      if (!category) {
+        const { data: newCategory, error: categoryError } = await supabase
+          .from('categories')
+          .insert({
+            user_id: user?.id,
+            name: 'Pagamentos de Pacientes',
+            type: 'income',
+            color: '#10B981'
+          })
+          .select('id')
+          .single();
+
+        if (categoryError) throw categoryError;
+        category = newCategory;
+      }
+
+      // Buscar primeira conta do usuário
+      const { data: accounts } = await supabase
+        .from('accounts')
+        .select('id')
+        .eq('user_id', user?.id)
+        .limit(1);
+
+      if (!accounts || accounts.length === 0) {
+        throw new Error('Nenhuma conta encontrada. Crie uma conta primeiro.');
+      }
+
+      // Criar transação
+      const { data: transaction, error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: user?.id,
+          account_id: accounts[0].id,
+          category_id: category.id,
+          amount: payment.amount,
+          type: 'income',
+          description: `Pagamento - ${payment.patient?.name || 'Paciente'}`,
+          date: payment.payment_date,
+        })
+        .select('id')
+        .single();
+
+      if (transactionError) throw transactionError;
+
+      // Atualizar o pagamento com o ID da transação
+      await supabase
+        .from('patient_payments')
+        .update({ transaction_id: transaction.id })
+        .eq('id', payment.id);
+
+      return transaction.id;
+    } catch (error) {
+      console.error('Error creating transaction from payment:', error);
+      throw error;
     }
   };
 
