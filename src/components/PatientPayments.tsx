@@ -614,6 +614,38 @@ export function PatientPayments() {
                     </div>
                   </div>
 
+                      {/* Botões de Status - Ações Rápidas */}
+                      {payment.status === 'pending' && (
+                        <button
+                          onClick={() => handleMarkAsPaid(payment.id)}
+                          className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Pago</span>
+                        </button>
+                      )}
+
+                      {payment.status === 'pending' && new Date() > new Date(payment.payment_date) && (
+                        <button
+                          onClick={() => handleMarkAsOverdue(payment.id)}
+                          className="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
+                        >
+                          <AlertCircle className="w-4 h-4" />
+                          <span>Atrasado</span>
+                        </button>
+                      )}
+
+                      {payment.status === 'overdue' && (
+                        <button
+                          onClick={() => handleMarkAsPaid(payment.id)}
+                          className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Pago</span>
+                        </button>
+                      )}
+
+                      {/* Botões de Ação Padrão */}
                   <div className="flex space-x-1">
                     <button
                       onClick={() => handleView(payment)}
@@ -652,6 +684,45 @@ export function PatientPayments() {
           onStatusChange={handleStatusChange}
         />
       )}
+
+      {/* Funções auxiliares para marcar status */}
+      {React.createElement(() => {
+        const handleMarkAsPaid = async (paymentId: string) => {
+          try {
+            const { error } = await supabase
+              .from('patient_payments')
+              .update({ status: 'paid' })
+              .eq('id', paymentId)
+              .eq('user_id', user?.id);
+
+            if (error) throw error;
+            await loadPayments();
+          } catch (error) {
+            console.error('Error updating payment status:', error);
+          }
+        };
+
+        const handleMarkAsOverdue = async (paymentId: string) => {
+          try {
+            const { error } = await supabase
+              .from('patient_payments')
+              .update({ status: 'overdue' })
+              .eq('id', paymentId)
+              .eq('user_id', user?.id);
+
+            if (error) throw error;
+            await loadPayments();
+          } catch (error) {
+            console.error('Error updating payment status:', error);
+          }
+        };
+
+        // Anexar as funções ao escopo do componente
+        window.handleMarkAsPaid = handleMarkAsPaid;
+        window.handleMarkAsOverdue = handleMarkAsOverdue;
+        
+        return null;
+      })}
 
       {/* Modal Adicionar/Editar Pagamento */}
       {showModal && (
