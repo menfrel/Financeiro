@@ -523,38 +523,6 @@ export function PatientPayments() {
         </div>
       </div>
 
-      {/* Navegação do Calendário (apenas na visualização mensal) */}
-      {calendarView === "calendar" && (
-        <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
-          <button
-            onClick={() => navigateMonth('prev')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {currentMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-            </h2>
-            <button
-              onClick={() => navigateMonth('today')}
-              className="flex items-center gap-2 px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
-            >
-              <Calendar className="w-4 h-4" />
-              Hoje
-            </button>
-          </div>
-
-          <button
-            onClick={() => navigateMonth('next')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-      )}
-
       {/* Conteúdo */}
       {calendarView === "list" ? (
         /* Visualização em Lista */
