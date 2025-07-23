@@ -21,7 +21,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { PaymentCalendar } from './PaymentCalendar';
-import { generateRecurringPayments } from '../utils/recurringPayments';
+import { RecurringPaymentGenerator } from '../utils/recurringPayments';
 
 interface Patient {
   id: string;
@@ -110,7 +110,7 @@ export function PatientPayments() {
     if (user) {
       loadPayments();
       loadPatients();
-      generateRecurringPayments(user.id);
+      RecurringPaymentGenerator.initializeRecurringPayments(user.id);
     }
   }, [user]);
 
