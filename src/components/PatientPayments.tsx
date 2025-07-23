@@ -118,7 +118,6 @@ export function PatientPayments() {
     if (user) {
       loadPayments();
       loadPatients();
-      RecurringPaymentGenerator.initializeRecurringPayments(user.id);
     }
   }, [user]);
 
@@ -132,11 +131,6 @@ export function PatientPayments() {
 
   const loadPayments = async () => {
     try {
-      // Primeiro, gerar pagamentos recorrentes
-      if (user?.id) {
-        await RecurringPaymentGenerator.forceGenerateRecurringPayments(user.id);
-      }
-      
       const { data, error } = await supabase
         .from('patient_payments')
         .select(`
@@ -153,6 +147,17 @@ export function PatientPayments() {
       console.error('Error loading payments:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateRecurringPayments = async () => {
+    try {
+      if (user?.id) {
+        await RecurringPaymentGenerator.forceGenerateRecurringPayments(user.id);
+        await loadPayments();
+      }
+    } catch (error) {
+      console.error('Error generating recurring payments:', error);
     }
   };
 
@@ -508,6 +513,13 @@ export function PatientPayments() {
         >
           <Plus className="w-4 h-4" />
           <span>Novo Pagamento</span>
+        </button>
+        <button
+          onClick={generateRecurringPayments}
+          className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+        >
+          <Repeat className="w-4 h-4" />
+          <span>Gerar Recorrentes</span>
         </button>
       </div>
 
