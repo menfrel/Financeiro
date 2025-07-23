@@ -8,9 +8,9 @@ import {
   Bell,
   Database,
   Download,
-  Upload,
   Trash2,
   Save,
+  Calendar,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 
@@ -19,6 +19,13 @@ interface UserProfile {
   email: string;
   full_name: string | null;
   avatar_url: string | null;
+}
+
+interface GoogleCalendarSettings {
+  google_client_id: string;
+  google_client_secret: string;
+  google_redirect_uri: string;
+  google_calendar_enabled: boolean;
 }
 
 interface ProfileForm {
@@ -35,6 +42,12 @@ interface PasswordForm {
 export function Settings() {
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [calendarSettings, setCalendarSettings] = useState<GoogleCalendarSettings>({
+    google_client_id: '',
+    google_client_secret: '',
+    google_redirect_uri: '',
+    google_calendar_enabled: false
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("profile");
@@ -45,6 +58,7 @@ export function Settings() {
     reset: resetProfile,
     formState: { errors: profileErrors },
   } = useForm<ProfileForm>();
+  
   const {
     register: registerPassword,
     handleSubmit: handlePasswordSubmit,
@@ -53,11 +67,19 @@ export function Settings() {
     formState: { errors: passwordErrors },
   } = useForm<PasswordForm>();
 
+  const {
+    register: registerCalendar,
+    handleSubmit: handleCalendarSubmit,
+    reset: resetCalendar,
+    formState: { errors: calendarErrors },
+  } = useForm<GoogleCalendarSettings>();
+
   const watchNewPassword = watch("newPassword");
 
   useEffect(() => {
     if (user) {
       loadProfile();
+      loadCalendarSettings();
     }
   }, [user]);
 
@@ -81,6 +103,44 @@ export function Settings() {
       console.error("Error loading profile:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCalendarSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", user!.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error("Error loading calendar settings:", error);
+        return;
+      }
+
+      if (data) {
+        const settings = {
+          google_client_id: data.google_client_id || '',
+          google_client_secret: data.google_client_secret || '',
+          google_redirect_uri: data.google_redirect_uri || `${window.location.origin}/auth/google/callback`,
+          google_calendar_enabled: data.google_calendar_enabled || false
+        };
+        setCalendarSettings(settings);
+        resetCalendar(settings);
+      } else {
+        // Configurações padrão
+        const defaultSettings = {
+          google_client_id: '',
+          google_client_secret: '',
+          google_redirect_uri: `${window.location.origin}/auth/google/callback`,
+          google_calendar_enabled: false
+        };
+        setCalendarSettings(defaultSettings);
+        resetCalendar(defaultSettings);
+      }
+    } catch (error) {
+      console.error("Error loading calendar settings:", error);
     }
   };
 
@@ -132,6 +192,34 @@ export function Settings() {
     } catch (error) {
       console.error("Error updating password:", error);
       alert("Erro ao alterar senha");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onCalendarSubmit = async (data: GoogleCalendarSettings) => {
+    try {
+      setSaving(true);
+
+      const settingsData = {
+        user_id: user!.id,
+        google_client_id: data.google_client_id,
+        google_client_secret: data.google_client_secret,
+        google_redirect_uri: data.google_redirect_uri,
+        google_calendar_enabled: data.google_calendar_enabled,
+      };
+
+      const { error } = await supabase
+        .from("user_settings")
+        .upsert(settingsData, { onConflict: 'user_id' });
+
+      if (error) throw error;
+
+      setCalendarSettings(data);
+      alert("Configurações do Google Calendar salvas com sucesso!");
+    } catch (error) {
+      console.error("Error saving calendar settings:", error);
+      alert("Erro ao salvar configurações");
     } finally {
       setSaving(false);
     }
@@ -204,7 +292,7 @@ export function Settings() {
   const tabs = [
     { id: "profile", name: "Perfil", icon: User },
     { id: "security", name: "Segurança", icon: Lock },
-    { id: "integrations", name: "Integrações", icon: Bell },
+    { id: "integrations", name: "Google Calendar", icon: Calendar },
     { id: "data", name: "Dados", icon: Database },
   ];
 
@@ -386,98 +474,97 @@ export function Settings() {
           )}
 
           {activeTab === "integrations" && (
-            <div className="space-y-6">
-              {/* Google Calendar Integration */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <Bell className="w-5 h-5 text-white" />
-                  </div>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Configurações do Google Calendar
+                  </h2>
+                  <p className="text-gray-600 text-sm">
+                    Configure a integração com o Google Calendar para sincronizar suas sessões
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleCalendarSubmit(onCalendarSubmit)} className="space-y-4">
+                <div className="grid grid-cols-1 gap-4">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      Google Calendar
-                    </h2>
-                    <p className="text-gray-600 text-sm">
-                      Sincronize suas sessões com o Google Calendar
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Google Client ID
+                    </label>
+                    <input
+                      {...registerCalendar("google_client_id")}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Seu Google Client ID"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Google Client Secret
+                    </label>
+                    <input
+                      {...registerCalendar("google_client_secret")}
+                      type="password"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Seu Google Client Secret"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Redirect URI
+                    </label>
+                    <input
+                      {...registerCalendar("google_redirect_uri")}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder={`${window.location.origin}/auth/google/callback`}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Use esta URL no Google Cloud Console como Redirect URI
                     </p>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      {...registerCalendar("google_calendar_enabled")}
+                      type="checkbox"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label className="ml-2 text-sm text-gray-700">
+                      Habilitar integração com Google Calendar
+                    </label>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h3 className="font-medium text-blue-900 mb-2">
-                      Como configurar:
-                    </h3>
-                    <ol className="text-blue-800 text-sm space-y-1 list-decimal list-inside">
-                      <li>Acesse o Google Cloud Console</li>
-                      <li>Crie um novo projeto ou selecione um existente</li>
-                      <li>Ative a Google Calendar API</li>
-                      <li>Configure as credenciais OAuth 2.0</li>
-                      <li>Adicione as variáveis de ambiente no projeto</li>
-                    </ol>
-                  </div>
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-blue-900 mb-2">
+                    Como configurar:
+                  </h3>
+                  <ol className="text-blue-800 text-sm space-y-1 list-decimal list-inside">
+                    <li>Acesse o <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="underline">Google Cloud Console</a></li>
+                    <li>Crie um novo projeto ou selecione um existente</li>
+                    <li>Ative a Google Calendar API</li>
+                    <li>Configure as credenciais OAuth 2.0</li>
+                    <li>Adicione a Redirect URI mostrada acima</li>
+                    <li>Copie e cole as credenciais nos campos acima</li>
+                  </ol>
+                </div>
 
-                  <div className="bg-amber-50 p-4 rounded-lg">
-                    <p className="text-amber-800 text-sm">
-                      <strong>Variáveis necessárias:</strong>
-                      <br />
-                      • GOOGLE_CLIENT_ID
-                      <br />
-                      • GOOGLE_CLIENT_SECRET
-                      <br />• GOOGLE_REDIRECT_URI
-                    </p>
-                  </div>
-
+                <div className="pt-4">
                   <button
-                    onClick={() =>
-                      window.open("https://console.cloud.google.com/", "_blank")
-                    }
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+                    type="submit"
+                    disabled={saving}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors disabled:opacity-50"
                   >
-                    <span>Abrir Google Cloud Console</span>
+                    <Save className="w-4 h-4" />
+                    <span>{saving ? "Salvando..." : "Salvar Configurações"}</span>
                   </button>
                 </div>
-              </div>
-
-              {/* Other Integrations */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  Outras Integrações
-                </h2>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div>
-                      <h3 className="font-medium text-gray-900">
-                        WhatsApp Business
-                      </h3>
-                      <p className="text-gray-600 text-sm">
-                        Envie lembretes automáticos por WhatsApp
-                      </p>
-                    </div>
-                    <span className="text-gray-400 text-sm">Em breve</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div>
-                      <h3 className="font-medium text-gray-900">Zoom</h3>
-                      <p className="text-gray-600 text-sm">
-                        Crie salas automáticas para sessões online
-                      </p>
-                    </div>
-                    <span className="text-gray-400 text-sm">Em breve</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                    <div>
-                      <h3 className="font-medium text-gray-900">Stripe</h3>
-                      <p className="text-gray-600 text-sm">
-                        Processe pagamentos online automaticamente
-                      </p>
-                    </div>
-                    <span className="text-gray-400 text-sm">Em breve</span>
-                  </div>
-                </div>
-              </div>
+              </form>
             </div>
           )}
 

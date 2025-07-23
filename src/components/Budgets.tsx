@@ -79,17 +79,18 @@ export function Budgets() {
       // Load budgets - garantir isolamento por usuário
       const { data: budgetsData, error: budgetsError } = await supabase
         .from("budgets")
-        .select(
-          `
+        .select(`
           *,
-          categories!inner (id, name, color, type)
-        `,
-        )
+          categories (id, name, color, type)
+        `)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       if (budgetsError) {
         console.error("Error loading budgets:", budgetsError);
+        setBudgets([]);
+        setLoading(false);
+        return;
       }
 
       // Load expense categories - garantir isolamento por usuário
@@ -102,13 +103,33 @@ export function Budgets() {
 
       if (categoriesError) {
         console.error("Error loading categories:", categoriesError);
+        setCategories([]);
       }
 
       setCategories(categoriesData || []);
 
       // Calculate spent amounts for each budget
+      if (!budgetsData || budgetsData.length === 0) {
+        setBudgets([]);
+        setLoading(false);
+        return;
+      }
+
       const budgetsWithSpent = await Promise.all(
-        (budgetsData || []).map(async (budget) => {
+        budgetsData.map(async (budget) => {
+          // Verificar se a categoria existe
+          if (!budget.categories) {
+            console.warn(`Budget ${budget.id} has no category`);
+            return {
+              ...budget,
+              amount: parseFloat(budget.amount) || 0,
+              spent: 0,
+              percentage: 0,
+              status: 'safe' as const,
+              category: null
+            };
+          }
+
           const { data: transactions, error: transactionsError } =
             await supabase
               .from("transactions")
@@ -138,11 +159,12 @@ export function Budgets() {
           return {
             ...budget,
             amount: budgetAmount,
+            category: budget.categories,
             spent,
             percentage,
             status,
           };
-        }),
+        })
       );
 
       setBudgets(budgetsWithSpent);
