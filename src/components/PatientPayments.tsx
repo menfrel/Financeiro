@@ -25,6 +25,7 @@ import {
   TrendingDown
 } from 'lucide-react';
 import { PaymentCalendar } from './PaymentCalendar';
+import { MonthlyPaymentsView } from './MonthlyPaymentsView';
 import { RecurringPaymentGenerator } from '../utils/recurringPayments';
 import { format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -257,6 +258,17 @@ export function PatientPayments() {
     }
   };
 
+  const handleStatusChange = async (id: string, newStatus: PatientPayment['status']) => {
+    // Atualizar o estado local imediatamente para feedback visual
+    setPayments(prevPayments => 
+      prevPayments.map(payment => 
+        payment.id === id ? { ...payment, status: newStatus } : payment
+      )
+    );
+    
+    // Recarregar dados para garantir consistência
+    await loadPayments();
+  };
   const handleView = (payment: PatientPayment) => {
     setViewingPayment(payment);
     setShowViewModal(true);
@@ -664,10 +676,12 @@ export function PatientPayments() {
         )
       ) : (
         /* Visualização em Calendário */
-        <PaymentCalendar
+        <MonthlyPaymentsView
           payments={filteredPayments}
-          currentMonth={currentMonth}
           onPaymentClick={handleView}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onStatusChange={handleStatusChange}
         />
       )}
 
