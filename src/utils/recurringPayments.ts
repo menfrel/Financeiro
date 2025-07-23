@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { addMonths, addWeeks, format, isBefore, isAfter, startOfDay } from 'date-fns';
+import { addMonths, addWeeks, format, isBefore, isAfter, startOfDay, addDays } from 'date-fns';
 
 interface RecurringPayment {
   id: string;
@@ -18,6 +18,8 @@ interface RecurringPayment {
 export class RecurringPaymentGenerator {
   static async generateRecurringPayments(userId: string) {
     try {
+      console.log('Generating recurring payments for user:', userId);
+      
       // Buscar todos os pagamentos recorrentes ativos do usuário
       const { data: recurringPayments, error } = await supabase
         .from('patient_payments')
@@ -36,10 +38,11 @@ export class RecurringPaymentGenerator {
       }
 
       const today = startOfDay(new Date());
+      const futureLimit = addMonths(today, 6); // Gerar até 6 meses no futuro
       const paymentsToCreate = [];
 
       for (const payment of recurringPayments) {
-        const nextPayments = this.calculateNextPayments(payment, today);
+        const nextPayments = this.calculateNextPayments(payment, today, futureLimit);
         paymentsToCreate.push(...nextPayments);
       }
 
@@ -52,7 +55,7 @@ export class RecurringPaymentGenerator {
         if (insertError) {
           console.error('Error creating recurring payments:', insertError);
         } else {
-          console.log(`Created ${paymentsToCreate.length} recurring payments`);
+          console.log(`Successfully created ${paymentsToCreate.length} recurring payments`);
         }
       }
     } catch (error) {
@@ -60,23 +63,28 @@ export class RecurringPaymentGenerator {
     }
   }
 
-  private static calculateNextPayments(payment: RecurringPayment, today: Date) {
+  private static calculateNextPayments(payment: RecurringPayment, today: Date, futureLimit: Date) {
     const paymentsToCreate = [];
     const lastPaymentDate = new Date(payment.payment_date);
     const recurringUntil = payment.recurring_until ? new Date(payment.recurring_until) : null;
 
-    // Calcular próximas datas baseado na frequência
+    // Começar a partir da próxima data de pagamento
     let nextDate = this.getNextPaymentDate(lastPaymentDate, payment.recurring_frequency, payment.recurring_day);
     
-    // Gerar pagamentos até 3 meses no futuro ou até a data limite
-    const maxDate = addMonths(today, 3);
-    const endDate = recurringUntil && isBefore(recurringUntil, maxDate) ? recurringUntil : maxDate;
+    // Determinar data limite
+    const endDate = recurringUntil && isBefore(recurringUntil, futureLimit) ? recurringUntil : futureLimit;
 
-    while (isBefore(nextDate, endDate) || nextDate.getTime() === endDate.getTime()) {
+    let iterationCount = 0;
+    const maxIterations = 50; // Prevenir loops infinitos
+
+    while ((isBefore(nextDate, endDate) || nextDate.getTime() === endDate.getTime()) && iterationCount < maxIterations) {
+      iterationCount++;
+      
       // Verificar se já existe um pagamento para esta data
-      const existingPayment = this.checkExistingPayment(payment, nextDate);
+      const existingPayment = await this.checkExistingPayment(payment, nextDate);
       
       if (!existingPayment) {
+        console.log(`Creating recurring payment for ${format(nextDate, 'yyyy-MM-dd')}`);
         paymentsToCreate.push({
           user_id: payment.user_id,
           patient_id: payment.patient_id,
@@ -85,7 +93,7 @@ export class RecurringPaymentGenerator {
           payment_method: payment.payment_method,
           description: payment.description,
           status: 'pending',
-          is_recurring: false, // Pagamentos gerados não são recorrentes
+          is_recurring: false,
           parent_payment_id: payment.id,
         });
       }
@@ -99,14 +107,14 @@ export class RecurringPaymentGenerator {
 
   private static getNextPaymentDate(currentDate: Date, frequency: 'weekly' | 'monthly', recurringDay: number): Date {
     if (frequency === 'weekly') {
-      return addWeeks(currentDate, 1);
+      return addDays(currentDate, 7);
     } else {
-      // Para mensal, usar o dia específico
-      const nextMonth = addMonths(currentDate, 1);
+      // Para frequência mensal
+      let nextMonth = addMonths(currentDate, 1);
       const year = nextMonth.getFullYear();
       const month = nextMonth.getMonth();
       
-      // Ajustar para o último dia do mês se o dia não existir
+      // Usar o dia específico ou último dia do mês se não existir
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const day = Math.min(recurringDay, daysInMonth);
       
@@ -131,15 +139,14 @@ export class RecurringPaymentGenerator {
     return data && data.length > 0;
   }
 
-  // Método para ser chamado quando o usuário faz login ou acessa a página
+  // Método para forçar geração de pagamentos recorrentes
+  static async forceGenerateRecurringPayments(userId: string) {
+    await this.generateRecurringPayments(userId);
+  }
+
+  // Método para inicializar pagamentos recorrentes
   static async initializeRecurringPayments(userId: string) {
-    // Executar apenas uma vez por dia por usuário
-    const lastRun = localStorage.getItem(`lastRecurringRun_${userId}`);
-    const today = format(new Date(), 'yyyy-MM-dd');
-    
-    if (lastRun !== today) {
-      await this.generateRecurringPayments(userId);
-      localStorage.setItem(`lastRecurringRun_${userId}`, today);
-    }
+    // Sempre executar para garantir que pagamentos futuros sejam criados
+    await this.generateRecurringPayments(userId);
   }
 }
