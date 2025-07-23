@@ -205,7 +205,7 @@ export function PatientPayments() {
         session_id: data.session_id || null,
         recurring_day: data.is_recurring ? Number(data.recurring_day) : null,
         recurring_frequency: data.is_recurring ? data.recurring_frequency : null,
-        recurring_until: data.is_recurring && data.recurring_until ? data.recurring_until : null
+        recurring_until: data.is_recurring && data.recurring_until && data.recurring_until !== '' ? data.recurring_until : null
       };
 
       if (editingPayment) {
