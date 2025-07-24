@@ -1091,12 +1091,22 @@ export function Sessions() {
 
       {/* Modal Configuração Google Calendar */}
       {isCalendarConfigOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Integração Google Calendar
-              </h2>
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Configuração Google Calendar
+                  </h2>
+                  <p className="text-sm text-gray-600">
+                    Configure a integração para sincronizar suas sessões
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={() => setIsCalendarConfigOpen(false)}
                 className="text-gray-400 hover:text-gray-600"
@@ -1106,79 +1116,163 @@ export function Sessions() {
             </div>
 
             <div className="space-y-4">
-              <div className="text-center">
-                <Calendar className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Conectar com Google Calendar
-                </h3>
-                <p className="text-gray-600 text-sm mb-6">
-                  Sincronize automaticamente suas sessões com o Google Calendar.
-                  Você e seus pacientes receberão lembretes automáticos.
-                </p>
+              {/* Status da Integração */}
+              {calendarIntegrationEnabled && (
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <span className="font-medium text-green-900">
+                      Integração Ativa
+                    </span>
+                  </div>
+                  <p className="text-green-800 text-sm">
+                    Suas sessões estão sendo sincronizadas automaticamente com o Google Calendar.
+                  </p>
+                </div>
+              )}
+
+              {/* Formulário de Configuração */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Google Client ID *
+                  </label>
+                  <input
+                    type="text"
+                    value={calendarSettings.google_client_id}
+                    onChange={(e) => setCalendarSettings(prev => ({
+                      ...prev,
+                      google_client_id: e.target.value
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Seu Google Client ID"
+                  />
+                </div>
               </div>
 
-              {!calendarIntegrationEnabled ? (
-                <div className="space-y-4">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="font-medium text-blue-900 mb-2">
-                      Benefícios:
-                    </h4>
-                    <ul className="text-blue-800 text-sm space-y-1">
-                      <li>• Sincronização automática de sessões</li>
-                      <li>• Lembretes por email para você e pacientes</li>
-                      <li>• Visualização no seu calendário pessoal</li>
-                      <li>• Evita conflitos de horários</li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-amber-50 p-4 rounded-lg">
-                    <p className="text-amber-800 text-sm">
-                      <strong>Nota:</strong> Para configurar a integração com
-                      Google Calendar, você precisa configurar as credenciais
-                      OAuth2 do Google nas configurações do projeto.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      alert(
-                        "Para configurar a integração com Google Calendar, você precisa:\n\n1. Criar um projeto no Google Cloud Console\n2. Ativar a Calendar API\n3. Configurar OAuth2\n4. Adicionar as credenciais nas variáveis de ambiente\n\nConsulte a documentação para mais detalhes.",
-                      );
-                    }}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
-                  >
-                    <ExternalLink className="w-5 h-5" />
-                    <span>Configurar Integração</span>
-                  </button>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Google Client Secret *
+                  </label>
+                  <input
+                    type="password"
+                    value={calendarSettings.google_client_secret}
+                    onChange={(e) => setCalendarSettings(prev => ({
+                      ...prev,
+                      google_client_secret: e.target.value
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Seu Google Client Secret"
+                  />
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
-                      <span className="font-medium text-green-900">
-                        Integração Ativa
-                      </span>
-                    </div>
-                    <p className="text-green-800 text-sm">
-                      Suas sessões estão sendo sincronizadas automaticamente com
-                      o Google Calendar.
-                    </p>
-                  </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Redirect URI
+                  </label>
+                  <input
+                    type="text"
+                    value={calendarSettings.google_redirect_uri}
+                    onChange={(e) => setCalendarSettings(prev => ({
+                      ...prev,
+                      google_redirect_uri: e.target.value
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={`${window.location.origin}/auth/google/callback`}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Use esta URL no Google Cloud Console como Redirect URI
+                  </p>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={calendarSettings.google_calendar_enabled}
+                    onChange={(e) => setCalendarSettings(prev => ({
+                      ...prev,
+                      google_calendar_enabled: e.target.checked
+                    }))}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label className="ml-2 text-sm text-gray-700">
+                    Habilitar integração com Google Calendar
+                  </label>
+                </div>
+              </div>
+
+              {/* Instruções */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-medium text-blue-900 mb-2">
+                  Como configurar:
+                </h3>
+                <ol className="text-blue-800 text-sm space-y-1 list-decimal list-inside">
+                  <li>Acesse o <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-900">Google Cloud Console</a></li>
+                  <li>Crie um novo projeto ou selecione um existente</li>
+                  <li>Ative a Google Calendar API</li>
+                  <li>Configure as credenciais OAuth 2.0</li>
+                  <li>Adicione a Redirect URI mostrada acima</li>
+                  <li>Copie e cole as credenciais nos campos acima</li>
+                </ol>
+              </div>
+
+              {/* Benefícios */}
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="font-medium text-green-900 mb-2">
+                  Benefícios da Integração:
+                </h4>
+                <ul className="text-green-800 text-sm space-y-1">
+                  <li>• Sincronização automática de sessões</li>
+                  <li>• Lembretes por email para você e pacientes</li>
+                  <li>• Visualização no seu calendário pessoal</li>
+                  <li>• Evita conflitos de horários</li>
+                </ul>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => setIsCalendarConfigOpen(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={saveCalendarSettings}
+                  disabled={savingCalendarSettings}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>{savingCalendarSettings ? "Salvando..." : "Salvar Configurações"}</span>
+                </button>
+                </div>
+              
+              {/* Botão de Desconectar (se já estiver conectado) */}
+              {calendarIntegrationEnabled && (
+                <div className="pt-4 border-t border-gray-200">
                   <button
                     onClick={() => {
-                      // Disconnect Google Calendar
+                      setCalendarSettings(prev => ({
+                        ...prev,
+                        google_calendar_enabled: false
+                      }));
                       setCalendarIntegrationEnabled(false);
-                      alert("Integração com Google Calendar desconectada.");
+                      alert("Integração com Google Calendar desabilitada.");
                     }}
-                    className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg transition-colors"
+                    className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2"
                   >
-                    Desconectar
+                    <XCircle className="w-4 h-4" />
+                    <span>Desabilitar Integração</span>
                   </button>
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
             <div className="flex justify-end pt-4">
               <button
