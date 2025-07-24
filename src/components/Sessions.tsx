@@ -1148,7 +1148,6 @@ export function Sessions() {
                     placeholder="Seu Google Client ID"
                   />
                 </div>
-              </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1245,7 +1244,7 @@ export function Sessions() {
                   <Settings className="w-4 h-4" />
                   <span>{savingCalendarSettings ? "Salvando..." : "Salvar Configurações"}</span>
                 </button>
-                </div>
+              </div>
               
               {/* Botão de Desconectar (se já estiver conectado) */}
               {calendarIntegrationEnabled && (
@@ -1266,21 +1265,6 @@ export function Sessions() {
                   </button>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-            <div className="flex justify-end pt-4">
-              <button
-                onClick={() => setIsCalendarConfigOpen(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                Fechar
-              </button>
             </div>
           </div>
         </div>
