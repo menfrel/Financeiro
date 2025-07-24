@@ -52,6 +52,13 @@ export function Sessions() {
   const [isCalendarConfigOpen, setIsCalendarConfigOpen] = useState(false);
   const [calendarIntegrationEnabled, setCalendarIntegrationEnabled] =
     useState(false);
+  const [calendarSettings, setCalendarSettings] = useState({
+    google_client_id: '',
+    google_client_secret: '',
+    google_redirect_uri: '',
+    google_calendar_enabled: false
+  });
+  const [savingCalendarSettings, setSavingCalendarSettings] = useState(false);
 
   const {
     register,
@@ -69,6 +76,7 @@ export function Sessions() {
     if (user) {
       loadData();
       checkCalendarIntegration();
+      loadCalendarSettings();
     }
   }, [user]);
 
@@ -76,6 +84,72 @@ export function Sessions() {
     // Check if Google Calendar is configured
     const isConfigured = googleCalendarService.isConfigured();
     setCalendarIntegrationEnabled(isConfigured);
+  };
+
+  const loadCalendarSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", user!.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error("Error loading calendar settings:", error);
+        return;
+      }
+
+      if (data) {
+        const settings = {
+          google_client_id: data.google_client_id || '',
+          google_client_secret: data.google_client_secret || '',
+          google_redirect_uri: data.google_redirect_uri || `${window.location.origin}/auth/google/callback`,
+          google_calendar_enabled: data.google_calendar_enabled || false
+        };
+        setCalendarSettings(settings);
+        setCalendarIntegrationEnabled(settings.google_calendar_enabled);
+      } else {
+        // Configurações padrão
+        const defaultSettings = {
+          google_client_id: '',
+          google_client_secret: '',
+          google_redirect_uri: `${window.location.origin}/auth/google/callback`,
+          google_calendar_enabled: false
+        };
+        setCalendarSettings(defaultSettings);
+      }
+    } catch (error) {
+      console.error("Error loading calendar settings:", error);
+    }
+  };
+
+  const saveCalendarSettings = async () => {
+    try {
+      setSavingCalendarSettings(true);
+
+      const settingsData = {
+        user_id: user!.id,
+        google_client_id: calendarSettings.google_client_id,
+        google_client_secret: calendarSettings.google_client_secret,
+        google_redirect_uri: calendarSettings.google_redirect_uri,
+        google_calendar_enabled: calendarSettings.google_calendar_enabled,
+      };
+
+      const { error } = await supabase
+        .from("user_settings")
+        .upsert(settingsData, { onConflict: 'user_id' });
+
+      if (error) throw error;
+
+      setCalendarIntegrationEnabled(calendarSettings.google_calendar_enabled);
+      alert("Configurações do Google Calendar salvas com sucesso!");
+      setIsCalendarConfigOpen(false);
+    } catch (error) {
+      console.error("Error saving calendar settings:", error);
+      alert("Erro ao salvar configurações");
+    } finally {
+      setSavingCalendarSettings(false);
+    }
   };
 
   const loadData = async () => {
