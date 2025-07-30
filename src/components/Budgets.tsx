@@ -10,9 +10,11 @@ import {
   CheckCircle,
   TrendingUp,
   TrendingDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { format, startOfMonth, endOfMonth, isWithinInterval, parse } from "date-fns";
+import { format, startOfMonth, endOfMonth, isWithinInterval, parse, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface Budget {
@@ -53,6 +55,7 @@ export function Budgets() {
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const {
     register,
@@ -66,7 +69,7 @@ export function Budgets() {
     if (user) {
       loadData();
     }
-  }, [user]);
+  }, [user, selectedMonth]);
 
   const loadData = async () => {
     try {
@@ -87,6 +90,8 @@ export function Budgets() {
           categories (id, name, color, type)
         `)
         .eq("user_id", user.id)
+        .gte("start_date", format(startOfMonth(selectedMonth), "yyyy-MM-dd"))
+        .lte("end_date", format(endOfMonth(selectedMonth), "yyyy-MM-dd"))
         .order("created_at", { ascending: false });
 
       if (budgetsError) {
@@ -245,9 +250,8 @@ export function Budgets() {
   const openModal = () => {
     setEditingBudget(null);
     reset();
-    const currentDate = new Date();
-    const startDate = startOfMonth(currentDate);
-    const endDate = endOfMonth(currentDate);
+    const startDate = startOfMonth(selectedMonth);
+    const endDate = endOfMonth(selectedMonth);
     setValue("start_date", format(startDate, "yyyy-MM-dd"));
     setValue("end_date", format(endDate, "yyyy-MM-dd"));
     setIsModalOpen(true);
@@ -311,11 +315,37 @@ export function Budgets() {
 
   return (
     <div className="p-6">
+      {/* Navegação por Mês */}
+      <div className="flex items-center justify-between bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
+        <button
+          onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900">
+            {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
+          </h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {budgets.length} orçamento(s) no mês
+          </p>
+        </div>
+
+        <button
+          onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
+
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Orçamentos</h1>
           <p className="text-gray-600 mt-2">
-            Defina e acompanhe seus limites de gastos
+            Defina e acompanhe seus limites de gastos para {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
           </p>
         </div>
         <button
@@ -411,13 +441,13 @@ export function Budgets() {
             Nenhum orçamento encontrado
           </h3>
           <p className="text-gray-600 mb-6">
-            Crie seu primeiro orçamento para controlar seus gastos
+            Crie um orçamento para {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })} para controlar seus gastos
           </p>
           <button
             onClick={openModal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
           >
-            Criar Orçamento
+            Criar Orçamento para {format(selectedMonth, 'MMM yyyy', { locale: ptBR })}
           </button>
         </div>
       ) : (
