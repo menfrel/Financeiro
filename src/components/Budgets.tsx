@@ -35,6 +35,7 @@ interface BudgetForm {
   amount: number;
   start_date: string;
   end_date: string;
+  description?: string;
 }
 
 interface BudgetWithSpent extends Budget {
@@ -438,10 +439,17 @@ export function Budgets() {
                         {budget.category?.name || "Categoria não encontrada"}
                       </h3>
                       <p className="text-sm text-gray-600">
-                        {format(parse(budget.start_date, "yyyy-MM-dd", new Date()), "MMM yyyy", {
+                        {format(parse(budget.start_date, "yyyy-MM-dd", new Date()), "dd/MM", {
+                          locale: ptBR,
+                        })} - {format(parse(budget.end_date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", {
                           locale: ptBR,
                         })}
                       </p>
+                      {budget.description && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {budget.description}
+                        </p>
+                      )}
                       {budget.category?.type && (
                         <p className="text-xs text-gray-500 capitalize">
                           {budget.category.type === "income"
