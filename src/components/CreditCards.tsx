@@ -11,6 +11,9 @@ import {
   Edit2,
   Trash2,
   Search,
+  ChevronLeft,
+  ChevronRight,
+  TrendingUp,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format, addMonths, startOfMonth, endOfMonth, parse } from "date-fns";
@@ -72,9 +75,13 @@ export function CreditCards() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [editingTransaction, setEditingTransaction] = useState<CreditCardTransaction | null>(null);
+  const [isEditTransactionModalOpen, setIsEditTransactionModalOpen] = useState(false);
+  const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
+  const [advancingTransaction, setAdvancingTransaction] = useState<CreditCardTransaction | null>(null);
+  const [selectedTransactionMonth, setSelectedTransactionMonth] = useState(new Date());
 
   const [viewMode, setViewMode] = useState<"cards" | "transactions">("cards");
-  const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const {
     register: registerCard,
@@ -98,6 +105,14 @@ export function CreditCards() {
     setValue,
     formState: { errors: paymentErrors },
   } = useForm<PaymentForm>();
+
+  const {
+    register: registerEditTransaction,
+    handleSubmit: handleEditTransactionSubmit,
+    reset: resetEditTransaction,
+    setValue: setEditTransactionValue,
+    formState: { errors: editTransactionErrors },
+  } = useForm<Omit<TransactionForm, 'credit_card_id'>>();
 
   useEffect(() => {
     if (user) {
@@ -354,6 +369,138 @@ export function CreditCards() {
     return newCategory?.id;
   };
 
+  const handleEditTransaction = (transaction: CreditCardTransaction) => {
+    setEditingTransaction(transaction);
+    setEditTransactionValue("amount", transaction.amount);
+    setEditTransactionValue("description", transaction.description);
+    setEditTransactionValue("date", transaction.date);
+    setEditTransactionValue("installments", transaction.installments);
+    setIsEditTransactionModalOpen(true);
+  };
+
+  const onEditTransactionSubmit = async (data: Omit<TransactionForm, 'credit_card_id'>) => {
+    if (!editingTransaction) return;
+
+    try {
+      setSubmitting(true);
+
+      const { error } = await supabase
+        .from("credit_card_transactions")
+        .update({
+          amount: data.amount,
+          description: data.description,
+          date: data.date,
+          installments: data.installments,
+        })
+        .eq("id", editingTransaction.id)
+        .eq("user_id", user!.id);
+
+      if (error) throw error;
+
+      await loadData();
+      setIsEditTransactionModalOpen(false);
+      setEditingTransaction(null);
+      resetEditTransaction();
+    } catch (error) {
+      console.error("Error updating transaction:", error);
+      alert("Erro ao atualizar transação");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    if (!confirm("Deseja realmente excluir esta transação?")) return;
+
+    try {
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) return;
+
+      // Atualizar saldo do cartão
+      const card = creditCards.find(c => c.id === transaction.credit_card_id);
+      if (card) {
+        const { error: cardError } = await supabase
+          .from("credit_cards")
+          .update({
+            current_balance: Math.max(0, card.current_balance - transaction.amount),
+          })
+          .eq("id", transaction.credit_card_id);
+
+        if (cardError) throw cardError;
+      }
+
+      // Excluir transação
+      const { error } = await supabase
+        .from("credit_card_transactions")
+        .delete()
+        .eq("id", transactionId)
+        .eq("user_id", user!.id);
+
+      if (error) throw error;
+
+      await loadData();
+    } catch (error) {
+      console.error("Error deleting transaction:", error);
+      alert("Erro ao excluir transação");
+    }
+  };
+
+  const handleAdvanceInstallment = (transaction: CreditCardTransaction) => {
+    setAdvancingTransaction(transaction);
+    setIsAdvanceModalOpen(true);
+  };
+
+  const processAdvanceInstallment = async () => {
+    if (!advancingTransaction) return;
+
+    try {
+      setSubmitting(true);
+
+      // Criar nova transação para a próxima parcela
+      const nextInstallment = advancingTransaction.current_installment + 1;
+      const nextDate = addMonths(new Date(advancingTransaction.date), 1);
+
+      const { error } = await supabase
+        .from("credit_card_transactions")
+        .insert({
+          user_id: user!.id,
+          credit_card_id: advancingTransaction.credit_card_id,
+          amount: advancingTransaction.amount,
+          description: advancingTransaction.description.replace(
+            `(${advancingTransaction.current_installment}/${advancingTransaction.installments})`,
+            `(${nextInstallment}/${advancingTransaction.installments})`
+          ),
+          date: format(nextDate, "yyyy-MM-dd"),
+          installments: advancingTransaction.installments,
+          current_installment: nextInstallment,
+        });
+
+      if (error) throw error;
+
+      // Atualizar saldo do cartão
+      const card = creditCards.find(c => c.id === advancingTransaction.credit_card_id);
+      if (card) {
+        const { error: cardError } = await supabase
+          .from("credit_cards")
+          .update({
+            current_balance: card.current_balance + advancingTransaction.amount,
+          })
+          .eq("id", advancingTransaction.credit_card_id);
+
+        if (cardError) throw cardError;
+      }
+
+      await loadData();
+      setIsAdvanceModalOpen(false);
+      setAdvancingTransaction(null);
+    } catch (error) {
+      console.error("Error advancing installment:", error);
+      alert("Erro ao adiantar parcela");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleEditCard = (card: CreditCard) => {
     setEditingCard(card);
     setCardValue("name", card.name);
@@ -414,13 +561,23 @@ export function CreditCards() {
   };
 
   const groupTransactionsByMonth = () => {
-    const grouped = transactions.reduce((acc: any, transaction: any) => {
+    // Filtrar transações do mês selecionado
+    const monthStart = startOfMonth(selectedTransactionMonth);
+    const monthEnd = endOfMonth(selectedTransactionMonth);
+    
+    const filteredTransactions = transactions.filter(transaction => {
+      const transactionDate = new Date(transaction.date);
+      return transactionDate >= monthStart && transactionDate <= monthEnd;
+    });
+
+    const grouped = filteredTransactions.reduce((acc: any, transaction: any) => {
       const date = new Date(transaction.date);
       const monthKey = format(date, "yyyy-MM");
       
       if (!acc[monthKey]) {
         acc[monthKey] = {
           month: format(date, "MMMM yyyy", { locale: ptBR }),
+          monthKey,
           transactions: [],
           total: 0
         };
@@ -432,9 +589,7 @@ export function CreditCards() {
       return acc;
     }, {});
 
-    return Object.values(grouped).sort((a: any, b: any) => 
-      new Date(b.transactions[0].date).getTime() - new Date(a.transactions[0].date).getTime()
-    );
+    return Object.values(grouped);
   };
 
   const getCardStatus = (card: CreditCard) => {
@@ -664,6 +819,32 @@ export function CreditCards() {
       ) : (
         /* Transactions View */
         <div className="space-y-6">
+          {/* Month Navigation */}
+          <div className="flex items-center justify-between bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <button
+              onClick={() => setSelectedTransactionMonth(subMonths(selectedTransactionMonth, 1))}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-gray-900 capitalize">
+                {format(selectedTransactionMonth, 'MMMM yyyy', { locale: ptBR })}
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Transações do mês
+              </p>
+            </div>
+
+            <button
+              onClick={() => setSelectedTransactionMonth(addMonths(selectedTransactionMonth, 1))}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+
           {transactions.length === 0 ? (
             <div className="text-center py-12">
               <CreditCard className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -681,7 +862,18 @@ export function CreditCards() {
               </button>
             </div>
           ) : (
-            groupTransactionsByMonth().map((monthGroup: any, index: number) => (
+            groupTransactionsByMonth().length === 0 ? (
+              <div className="text-center py-12">
+                <CreditCard className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Nenhuma transação neste mês
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Não há transações em {format(selectedTransactionMonth, 'MMMM yyyy', { locale: ptBR })}
+                </p>
+              </div>
+            ) : (
+              groupTransactionsByMonth().map((monthGroup: any, index: number) => (
               <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 {/* Month Header */}
                 <div className="bg-gradient-to-r from-purple-500 to-blue-600 p-6 text-white">
@@ -721,7 +913,7 @@ export function CreditCards() {
                               )}
                             </div>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600">
                               <div className="flex items-center space-x-2">
                                 <Calendar className="w-4 h-4" />
                                 <span>{formatDate(transaction.date)}</span>
@@ -738,13 +930,41 @@ export function CreditCards() {
                               </div>
                             </div>
                           </div>
+                          
+                          {/* Action Buttons */}
+                          <div className="flex items-center space-x-2">
+                            {transaction.installments > 1 && transaction.current_installment < transaction.installments && (
+                              <button
+                                onClick={() => handleAdvanceInstallment(transaction)}
+                                className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
+                              >
+                                <TrendingUp className="w-4 h-4" />
+                                <span>Adiantar</span>
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleEditTransaction(transaction)}
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Editar"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTransaction(transaction.id)}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-            ))
+              ))
+            )
           )}
         </div>
       )}
@@ -1116,6 +1336,180 @@ export function CreditCards() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Transação */}
+      {isEditTransactionModalOpen && editingTransaction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              Editar Transação
+            </h2>
+
+            <form onSubmit={handleEditTransactionSubmit(onEditTransactionSubmit)} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Valor
+                </label>
+                <input
+                  {...registerEditTransaction("amount", {
+                    required: "Valor é obrigatório",
+                    valueAsNumber: true,
+                    min: { value: 0.01, message: "Valor deve ser maior que zero" },
+                  })}
+                  type="number"
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+                {editTransactionErrors.amount && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {editTransactionErrors.amount.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição
+                </label>
+                <input
+                  {...registerEditTransaction("description", {
+                    required: "Descrição é obrigatória",
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: Compra no supermercado"
+                />
+                {editTransactionErrors.description && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {editTransactionErrors.description.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data
+                  </label>
+                  <input
+                    {...registerEditTransaction("date", { required: "Data é obrigatória" })}
+                    type="date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {editTransactionErrors.date && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {editTransactionErrors.date.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Parcelas
+                  </label>
+                  <input
+                    {...registerEditTransaction("installments", {
+                      required: "Número de parcelas é obrigatório",
+                      valueAsNumber: true,
+                      min: { value: 1, message: "Mínimo 1 parcela" },
+                      max: { value: 24, message: "Máximo 24 parcelas" },
+                    })}
+                    type="number"
+                    min="1"
+                    max="24"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {editTransactionErrors.installments && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {editTransactionErrors.installments.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditTransactionModalOpen(false);
+                    setEditingTransaction(null);
+                    resetEditTransaction();
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {submitting ? "Salvando..." : "Atualizar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Adiantar Parcela */}
+      {isAdvanceModalOpen && advancingTransaction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              Adiantar Parcela
+            </h2>
+
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-blue-900 mb-2">
+                  {advancingTransaction.description}
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm text-blue-800">
+                  <div>
+                    <span className="font-medium">Parcela Atual:</span>
+                    <p>{advancingTransaction.current_installment} de {advancingTransaction.installments}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium">Valor:</span>
+                    <p>{formatCurrency(advancingTransaction.amount)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                <div className="flex items-center space-x-2 mb-2">
+                  <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                  <span className="font-medium text-yellow-900">Atenção</span>
+                </div>
+                <p className="text-yellow-800 text-sm">
+                  Isso criará a próxima parcela ({advancingTransaction.current_installment + 1} de {advancingTransaction.installments}) 
+                  e adicionará o valor à fatura do cartão.
+                </p>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => {
+                    setIsAdvanceModalOpen(false);
+                    setAdvancingTransaction(null);
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={processAdvanceInstallment}
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {submitting ? "Processando..." : "Adiantar Parcela"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
