@@ -322,6 +322,83 @@ export function Budgets() {
         </button>
       </div>
 
+      {/* Cards de Resumo dos Orçamentos */}
+      {budgets.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Previsão Total do Mês
+                </p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {formatCurrency(budgets.reduce((sum, budget) => sum + budget.amount, 0))}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {budgets.length} orçamento(s) ativo(s)
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Target className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Total Gasto
+                </p>
+                <p className="text-2xl font-bold text-red-600">
+                  {formatCurrency(budgets.reduce((sum, budget) => sum + budget.spent, 0))}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Gastos realizados
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                <TrendingDown className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Saldo Restante
+                </p>
+                <p className={`text-2xl font-bold ${
+                  budgets.reduce((sum, budget) => sum + (budget.amount - budget.spent), 0) >= 0
+                    ? "text-green-600"
+                    : "text-red-600"
+                }`}>
+                  {formatCurrency(budgets.reduce((sum, budget) => sum + (budget.amount - budget.spent), 0))}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {budgets.reduce((sum, budget) => sum + (budget.amount - budget.spent), 0) >= 0
+                    ? "Dentro do orçamento"
+                    : "Acima do orçamento"
+                  }
+                </p>
+              </div>
+              <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                budgets.reduce((sum, budget) => sum + (budget.amount - budget.spent), 0) >= 0
+                  ? "bg-green-100"
+                  : "bg-red-100"
+              }`}>
+                <TrendingUp className={`w-6 h-6 ${
+                  budgets.reduce((sum, budget) => sum + (budget.amount - budget.spent), 0) >= 0
+                    ? "text-green-600"
+                    : "text-red-600"
+                }`} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {budgets.length === 0 ? (
         <div className="text-center py-12">
           <Target className="w-16 h-16 text-gray-400 mx-auto mb-4" />
