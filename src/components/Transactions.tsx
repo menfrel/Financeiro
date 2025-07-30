@@ -39,12 +39,21 @@ interface TransactionForm {
   recurring_until?: string;
 }
 
+interface CreditCardTransactionForm {
+  credit_card_id: string;
+  amount: number;
+  description: string;
+  date: string;
+  installments: number;
+}
 export function Transactions() {
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [creditCards, setCreditCards] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreditCardModalOpen, setIsCreditCardModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,6 +74,14 @@ export function Transactions() {
     watch,
     formState: { errors },
   } = useForm<TransactionForm>();
+
+  const {
+    register: registerCreditCard,
+    handleSubmit: handleCreditCardSubmit,
+    reset: resetCreditCard,
+    formState: { errors: creditCardErrors },
+  } = useForm<CreditCardTransactionForm>();
+
   const watchType = watch("type");
   const watchIsRecurring = watch("is_recurring");
 
@@ -160,6 +177,13 @@ export function Transactions() {
         .order("type", { ascending: true })
         .order("name", { ascending: true });
 
+      // Load credit cards - garantir isolamento por usuário
+      const { data: creditCardsData } = await supabase
+        .from("credit_cards")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("name", { ascending: true });
+
       // Validar dados das transações
       const validatedTransactions = (transactionsData || []).map(
         (transaction) => ({
@@ -180,6 +204,7 @@ export function Transactions() {
       setTransactions(validatedTransactions);
       setAccounts(validatedAccounts);
       setCategories(categoriesData || []);
+      setCreditCards(creditCardsData || []);
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -245,6 +270,64 @@ export function Transactions() {
     }
   };
 
+  const onCreditCardSubmit = async (data: CreditCardTransactionForm) => {
+    try {
+      setSubmitting(true);
+
+      if (!user?.id) {
+        console.error("Usuário não autenticado");
+        return;
+      }
+
+      // Criar transações para cada parcela
+      const installmentAmount = data.amount / data.installments;
+      const baseDate = new Date(data.date);
+
+      for (let i = 0; i < data.installments; i++) {
+        const installmentDate = new Date(baseDate);
+        installmentDate.setMonth(installmentDate.getMonth() + i);
+        
+        const { error } = await supabase
+          .from("credit_card_transactions")
+          .insert({
+            user_id: user.id,
+            credit_card_id: data.credit_card_id,
+            amount: installmentAmount,
+            description: data.installments > 1 
+              ? `${data.description} (${i + 1}/${data.installments})`
+              : data.description,
+            date: format(installmentDate, "yyyy-MM-dd"),
+            installments: data.installments,
+            current_installment: i + 1,
+          });
+
+        if (error) throw error;
+      }
+
+      // Atualizar saldo do cartão
+      const card = creditCards.find(c => c.id === data.credit_card_id);
+      if (card) {
+        const { error } = await supabase
+          .from("credit_cards")
+          .update({
+            current_balance: card.current_balance + data.amount,
+          })
+          .eq("id", data.credit_card_id);
+
+        if (error) throw error;
+      }
+
+      setIsCreditCardModalOpen(false);
+      resetCreditCard();
+      alert("Compra no cartão registrada com sucesso!");
+    } catch (error) {
+      console.error("Error creating credit card transaction:", error);
+      alert("Erro ao registrar compra no cartão");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleEdit = (transaction: Transaction) => {
     setEditingTransaction(transaction);
     setValue("amount", transaction.amount);
@@ -296,6 +379,13 @@ export function Transactions() {
     reset();
     setValue("date", format(new Date(), "yyyy-MM-dd"));
     setIsModalOpen(true);
+  };
+
+  const openCreditCardModal = () => {
+    resetCreditCard();
+    setValue("date", format(new Date(), "yyyy-MM-dd"));
+    setValue("installments", 1);
+    setIsCreditCardModalOpen(true);
   };
 
   const formatCurrency = (value: number | null | undefined) => {
@@ -354,7 +444,7 @@ export function Transactions() {
         </div>
         <div className="flex space-x-3">
           <button
-            onClick={() => window.location.hash = '#credit-cards'}
+            onClick={openCreditCardModal}
             className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
           >
             <CreditCard className="w-4 h-4" />
@@ -735,6 +825,141 @@ export function Transactions() {
                     : editingTransaction
                       ? "Atualizar"
                       : "Criar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Compra no Cartão */}
+      {isCreditCardModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              Nova Compra no Cartão
+            </h2>
+
+            <form onSubmit={handleCreditCardSubmit(onCreditCardSubmit)} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Cartão
+                </label>
+                <select
+                  {...registerCreditCard("credit_card_id", {
+                    required: "Cartão é obrigatório",
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione o cartão</option>
+                  {creditCards.map((card) => (
+                    <option key={card.id} value={card.id}>
+                      {card.name}
+                    </option>
+                  ))}
+                </select>
+                {creditCardErrors.credit_card_id && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {creditCardErrors.credit_card_id.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Valor
+                </label>
+                <input
+                  {...registerCreditCard("amount", {
+                    required: "Valor é obrigatório",
+                    valueAsNumber: true,
+                    min: { value: 0.01, message: "Valor deve ser maior que zero" },
+                  })}
+                  type="number"
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+                {creditCardErrors.amount && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {creditCardErrors.amount.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição
+                </label>
+                <input
+                  {...registerCreditCard("description", {
+                    required: "Descrição é obrigatória",
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: Compra no supermercado"
+                />
+                {creditCardErrors.description && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {creditCardErrors.description.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data
+                  </label>
+                  <input
+                    {...registerCreditCard("date", { required: "Data é obrigatória" })}
+                    type="date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {creditCardErrors.date && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {creditCardErrors.date.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Parcelas
+                  </label>
+                  <input
+                    {...registerCreditCard("installments", {
+                      required: "Número de parcelas é obrigatório",
+                      valueAsNumber: true,
+                      min: { value: 1, message: "Mínimo 1 parcela" },
+                      max: { value: 24, message: "Máximo 24 parcelas" },
+                    })}
+                    type="number"
+                    min="1"
+                    max="24"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {creditCardErrors.installments && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {creditCardErrors.installments.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsCreditCardModalOpen(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {submitting ? "Criando..." : "Criar Compra"}
                 </button>
               </div>
             </form>
