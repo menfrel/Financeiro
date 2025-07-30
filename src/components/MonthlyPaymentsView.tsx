@@ -106,6 +106,14 @@ export function MonthlyPaymentsView({
     }
   };
 
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    if (direction === 'prev') {
+      setCurrentMonth(subMonths(currentMonth, 1));
+    } else {
+      setCurrentMonth(addMonths(currentMonth, 1));
+    }
+  };
+
   // Filtrar pagamentos do mês atual
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -118,51 +126,14 @@ export function MonthlyPaymentsView({
   // Calcular estatísticas do mês
   useEffect(() => {
     const stats = monthlyPayments.reduce((acc, payment) => {
-      const today = new Date();
-      const paymentDate = parseISO(payment.payment_date);
-      
-      switch (payment.status) {
-        case 'paid':
-          acc.totalReceived += payment.amount;
-          break;
-        case 'pending':
-          if (isAfter(today, paymentDate)) {
-            acc.totalOverdue += payment.amount;
-            acc.overdueCount++;
-          } else {
-            acc.totalPending += payment.amount;
-          }
-          break;
-        case 'overdue':
-          acc.totalOverdue += payment.amount;
-          acc.overdueCount++;
-          break;
-        case 'cancelled':
-          acc.totalCancelled += payment.amount;
-          break;
-      }
       acc.paymentsCount++;
       return acc;
     }, {
-      totalReceived: 0,
-      totalPending: 0,
-      totalOverdue: 0,
-      totalCancelled: 0,
-      paymentsCount: 0,
-      overdueCount: 0
+      paymentsCount: 0
     });
 
-    setMonthlyStats(stats);
+    setMonthlyStats({ ...monthlyStats, paymentsCount: stats.paymentsCount });
   }, [monthlyPayments.length, currentMonth]);
-
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    if (direction === 'prev') {
-      setCurrentMonth(subMonths(currentMonth, 1));
-    } else {
-      setCurrentMonth(addMonths(currentMonth, 1));
-    }
-  };
-
 
   return (
     <div className="space-y-6">
@@ -190,73 +161,6 @@ export function MonthlyPaymentsView({
         >
           <ChevronRight className="w-5 h-5" />
         </button>
-      </div>
-
-      {/* Cards de Estatísticas Mensais */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Recebido</p>
-              <p className="text-2xl font-bold text-green-600">
-                {formatCurrency(monthlyStats.totalReceived)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Pendente</p>
-              <p className="text-2xl font-bold text-yellow-600">
-                {formatCurrency(monthlyStats.totalPending)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <Clock className="w-6 h-6 text-yellow-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Em Atraso</p>
-              <p className="text-2xl font-bold text-red-600">
-                {formatCurrency(monthlyStats.totalOverdue)}
-              </p>
-              {monthlyStats.overdueCount > 0 && (
-                <p className="text-xs text-red-500 mt-1">
-                  {monthlyStats.overdueCount} pagamento(s)
-                </p>
-              )}
-            </div>
-            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6 text-red-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Ganho Líquido</p>
-              <p className="text-2xl font-bold text-blue-600">
-                {formatCurrency(monthlyStats.totalReceived)}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Receita do mês
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Lista de Pagamentos do Mês */}
