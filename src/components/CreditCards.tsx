@@ -13,7 +13,7 @@ import {
   Search,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { format, addMonths, startOfMonth, endOfMonth } from "date-fns";
+import { format, addMonths, startOfMonth, endOfMonth, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface CreditCard {
@@ -95,6 +95,7 @@ export function CreditCards() {
     register: registerPayment,
     handleSubmit: handlePaymentSubmit,
     reset: resetPayment,
+    setValue,
     formState: { errors: paymentErrors },
   } = useForm<PaymentForm>();
 
@@ -533,129 +534,218 @@ export function CreditCards() {
         </div>
       </div>
 
-      {/* Cards Grid */}
-      {filteredCards.length === 0 ? (
-        <div className="text-center py-12">
-          <CreditCard className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm ? "Nenhum cartão encontrado" : "Nenhum cartão cadastrado"}
-          </h3>
-          <p className="text-gray-600 mb-6">
-            {searchTerm 
-              ? "Tente ajustar o termo de busca" 
-              : "Cadastre seu primeiro cartão de crédito"
-            }
-          </p>
-          <button
-            onClick={openCardModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
-          >
-            Cadastrar Cartão
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCards.map((card) => {
-            const status = getCardStatus(card);
-            const usagePercentage = (card.current_balance / card.limit_amount) * 100;
-            
-            return (
-              <div
-                key={card.id}
-                className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                      <CreditCard className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{card.name}</h3>
-                      <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        status.color === 'red' ? 'bg-red-100 text-red-800' :
-                        status.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-green-100 text-green-800'
-                      }`}>
-                        {status.text}
+      {/* Content based on view mode */}
+      {viewMode === "cards" ? (
+        /* Cards Grid */
+        filteredCards.length === 0 ? (
+          <div className="text-center py-12">
+            <CreditCard className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {searchTerm ? "Nenhum cartão encontrado" : "Nenhum cartão cadastrado"}
+            </h3>
+            <p className="text-gray-600 mb-6">
+              {searchTerm 
+                ? "Tente ajustar o termo de busca" 
+                : "Cadastre seu primeiro cartão de crédito"
+              }
+            </p>
+            <button
+              onClick={openCardModal}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
+            >
+              Cadastrar Cartão
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredCards.map((card) => {
+              const status = getCardStatus(card);
+              const usagePercentage = (card.current_balance / card.limit_amount) * 100;
+              
+              return (
+                <div
+                  key={card.id}
+                  className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                        <CreditCard className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{card.name}</h3>
+                        <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          status.color === 'red' ? 'bg-red-100 text-red-800' :
+                          status.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-green-100 text-green-800'
+                        }`}>
+                          {status.text}
+                        </div>
                       </div>
                     </div>
+                    
+                    <div className="flex space-x-1">
+                      <button
+                        onClick={() => handleEditCard(card)}
+                        className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCard(card.id)}
+                        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  
-                  <div className="flex space-x-1">
-                    <button
-                      onClick={() => handleEditCard(card)}
-                      className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCard(card.id)}
-                      className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+
+                  <div className="space-y-4">
+                    {/* Saldo Atual */}
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm text-gray-600">Fatura Atual</span>
+                        <span className="font-semibold text-gray-900">
+                          {formatCurrency(card.current_balance)}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all ${
+                            status.color === 'red' ? 'bg-red-500' :
+                            status.color === 'yellow' ? 'bg-yellow-500' :
+                            'bg-green-500'
+                          }`}
+                          style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>{usagePercentage.toFixed(1)}% usado</span>
+                        <span>Limite: {formatCurrency(card.limit_amount)}</span>
+                      </div>
+                    </div>
+
+                    {/* Informações do Cartão */}
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">Fechamento</span>
+                        <p className="font-medium">Dia {card.closing_day}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Vencimento</span>
+                        <p className="font-medium">Dia {card.due_day}</p>
+                      </div>
+                    </div>
+
+                    {/* Ações */}
+                    <div className="flex space-x-2 pt-2">
+                      <button
+                        onClick={() => openPaymentModal(card.id)}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+                      >
+                        Pagar Fatura
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedCard(card.id);
+                          openTransactionModal();
+                        }}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+                      >
+                        Nova Compra
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : (
+        /* Transactions View */
+        <div className="space-y-6">
+          {transactions.length === 0 ? (
+            <div className="text-center py-12">
+              <CreditCard className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Nenhuma transação encontrada
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Registre sua primeira compra no cartão
+              </p>
+              <button
+                onClick={openTransactionModal}
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors"
+              >
+                Nova Compra
+              </button>
+            </div>
+          ) : (
+            groupTransactionsByMonth().map((monthGroup: any, index: number) => (
+              <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                {/* Month Header */}
+                <div className="bg-gradient-to-r from-purple-500 to-blue-600 p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold capitalize">{monthGroup.month}</h3>
+                      <p className="text-purple-100 mt-1">
+                        {monthGroup.transactions.length} transação(ões)
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold">{formatCurrency(monthGroup.total)}</p>
+                      <p className="text-purple-100 text-sm">Total do mês</p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  {/* Saldo Atual */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm text-gray-600">Fatura Atual</span>
-                      <span className="font-semibold text-gray-900">
-                        {formatCurrency(card.current_balance)}
-                      </span>
+                {/* Transactions List */}
+                <div className="divide-y divide-gray-100">
+                  {monthGroup.transactions.map((transaction: any) => (
+                    <div key={transaction.id} className="p-6 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
+                            <CreditCard className="w-6 h-6 text-white" />
+                          </div>
+                          
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <h4 className="font-semibold text-gray-900">
+                                {transaction.description}
+                              </h4>
+                              {transaction.installments > 1 && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  {transaction.current_installment} de {transaction.installments}
+                                </span>
+                              )}
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                              <div className="flex items-center space-x-2">
+                                <Calendar className="w-4 h-4" />
+                                <span>{formatDate(transaction.date)}</span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <CreditCard className="w-4 h-4" />
+                                <span>{transaction.credit_cards?.name || 'Cartão'}</span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <DollarSign className="w-4 h-4" />
+                                <span className="font-semibold text-gray-900">
+                                  {formatCurrency(transaction.amount)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full transition-all ${
-                          status.color === 'red' ? 'bg-red-500' :
-                          status.color === 'yellow' ? 'bg-yellow-500' :
-                          'bg-green-500'
-                        }`}
-                        style={{ width: `${Math.min(usagePercentage, 100)}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>{usagePercentage.toFixed(1)}% usado</span>
-                      <span>Limite: {formatCurrency(card.limit_amount)}</span>
-                    </div>
-                  </div>
-
-                  {/* Informações do Cartão */}
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Fechamento</span>
-                      <p className="font-medium">Dia {card.closing_day}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Vencimento</span>
-                      <p className="font-medium">Dia {card.due_day}</p>
-                    </div>
-                  </div>
-
-                  {/* Ações */}
-                  <div className="flex space-x-2 pt-2">
-                    <button
-                      onClick={() => openPaymentModal(card.id)}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
-                    >
-                      Pagar Fatura
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedCard(card.id);
-                        openTransactionModal();
-                      }}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
-                    >
-                      Nova Compra
-                    </button>
-                  </div>
+                  ))}
                 </div>
               </div>
-            );
-          })}
+            ))
+          )}
         </div>
       )}
 
