@@ -18,6 +18,7 @@ import { ptBR } from "date-fns/locale";
 interface Budget {
   id: string;
   amount: number;
+  description?: string;
   period: "monthly";
   start_date: string;
   end_date: string;
@@ -33,6 +34,7 @@ interface Budget {
 interface BudgetForm {
   category_id: string;
   amount: number;
+  description?: string;
   start_date: string;
   end_date: string;
 }
@@ -184,6 +186,7 @@ export function Budgets() {
         user_id: user!.id,
         category_id: data.category_id,
         amount: data.amount,
+        description: data.description || null,
         period: "monthly" as const,
         start_date: data.start_date,
         end_date: data.end_date,
@@ -217,6 +220,7 @@ export function Budgets() {
     setEditingBudget(budget);
     setValue("category_id", budget.category?.id || "");
     setValue("amount", budget.amount);
+    setValue("description", budget.description || "");
     setValue("start_date", budget.start_date);
     setValue("end_date", budget.end_date);
     setIsModalOpen(true);
@@ -438,10 +442,13 @@ export function Budgets() {
                         {budget.category?.name || "Categoria não encontrada"}
                       </h3>
                       <p className="text-sm text-gray-600">
-                        {format(parse(budget.start_date, "yyyy-MM-dd", new Date()), "MMM yyyy", {
-                          locale: ptBR,
-                        })}
+                        {format(parse(budget.start_date, "yyyy-MM-dd", new Date()), "dd/MM", { locale: ptBR })} - {format(parse(budget.end_date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR })}
                       </p>
+                      {budget.description && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {budget.description}
+                        </p>
+                      )}
                       {budget.category?.type && (
                         <p className="text-xs text-gray-500 capitalize">
                           {budget.category.type === "income"
@@ -581,6 +588,17 @@ export function Budgets() {
                     {errors.amount.message}
                   </p>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição (opcional)
+                </label>
+                <input
+                  {...register("description")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: Orçamento para tratamento dentário"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
