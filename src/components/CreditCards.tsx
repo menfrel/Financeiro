@@ -73,6 +73,9 @@ export function CreditCards() {
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const [viewMode, setViewMode] = useState<"cards" | "transactions">("cards");
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
+
   const {
     register: registerCard,
     handleSubmit: handleCardSubmit,
@@ -119,11 +122,18 @@ export function CreditCards() {
         .order("created_at", { ascending: false });
 
       // Carregar transações dos cartões
-      const { data: transactionsData } = await supabase
+      const { data: transactionsData, error: transactionsError } = await supabase
         .from("credit_card_transactions")
-        .select("*")
+        .select(`
+          *,
+          credit_cards (name)
+        `)
         .eq("user_id", user.id)
         .order("date", { ascending: false });
+
+      if (transactionsError) {
+        console.error("Error loading credit card transactions:", transactionsError);
+      }
 
       // Carregar contas para pagamento
       const { data: accountsData } = await supabase
@@ -396,6 +406,36 @@ export function CreditCards() {
     }).format(value);
   };
 
+  const formatDate = (dateString: string) => {
+    return format(parse(dateString, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", {
+      locale: ptBR,
+    });
+  };
+
+  const groupTransactionsByMonth = () => {
+    const grouped = transactions.reduce((acc: any, transaction: any) => {
+      const date = new Date(transaction.date);
+      const monthKey = format(date, "yyyy-MM");
+      
+      if (!acc[monthKey]) {
+        acc[monthKey] = {
+          month: format(date, "MMMM yyyy", { locale: ptBR }),
+          transactions: [],
+          total: 0
+        };
+      }
+      
+      acc[monthKey].transactions.push(transaction);
+      acc[monthKey].total += parseFloat(transaction.amount) || 0;
+      
+      return acc;
+    }, {});
+
+    return Object.values(grouped).sort((a: any, b: any) => 
+      new Date(b.transactions[0].date).getTime() - new Date(a.transactions[0].date).getTime()
+    );
+  };
+
   const getCardStatus = (card: CreditCard) => {
     const usagePercentage = (card.current_balance / card.limit_amount) * 100;
     
@@ -440,6 +480,28 @@ export function CreditCards() {
         </div>
         
         <div className="flex space-x-3">
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode("cards")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                viewMode === "cards"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Cartões
+            </button>
+            <button
+              onClick={() => setViewMode("transactions")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                viewMode === "transactions"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Transações
+            </button>
+          </div>
           <button
             onClick={openTransactionModal}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
