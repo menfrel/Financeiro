@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   CheckCircle,
   TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format, startOfMonth, endOfMonth, isWithinInterval, parse } from "date-fns";
