@@ -9,6 +9,7 @@ import {
   Trash2,
   Filter,
   Calendar,
+  CreditCard,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format, parse } from "date-fns";
@@ -351,13 +352,22 @@ export function Transactions() {
             Registre suas receitas e despesas
           </p>
         </div>
-        <button
-          onClick={openModal}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Novo Lançamento</span>
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => window.location.hash = '#credit-cards'}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Compra no Cartão</span>
+          </button>
+          <button
+            onClick={openModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Novo Lançamento</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

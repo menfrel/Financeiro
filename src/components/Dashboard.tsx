@@ -8,6 +8,7 @@ import {
   Target,
   ArrowUpRight,
   ArrowDownRight,
+  CreditCard,
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, subMonths, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -34,6 +35,12 @@ interface DashboardData {
     name: string;
     balance: number;
     type: string;
+  }>;
+  creditCards: Array<{
+    name: string;
+    currentBalance: number;
+    limitAmount: number;
+    availableLimit: number;
   }>;
   expensesByCategory: Array<{
     name: string;
@@ -72,6 +79,7 @@ export function Dashboard() {
     monthlyIncome: 0,
     monthlyExpenses: 0,
     accounts: [],
+    creditCards: [],
     expensesByCategory: [],
     monthlyTrend: [],
     recentTransactions: [],
@@ -139,6 +147,12 @@ export function Dashboard() {
       // Get accounts
       const { data: accounts } = await supabase
         .from("accounts")
+        .select("*")
+        .eq("user_id", user!.id);
+
+      // Get credit cards
+      const { data: creditCards } = await supabase
+        .from("credit_cards")
         .select("*")
         .eq("user_id", user!.id);
 
@@ -249,6 +263,12 @@ export function Dashboard() {
           name: account.name,
           balance: parseFloat(account.current_balance) || 0,
           type: account.type,
+        })),
+        creditCards: (creditCards || []).map((card) => ({
+          name: card.name,
+          currentBalance: parseFloat(card.current_balance) || 0,
+          limitAmount: parseFloat(card.limit_amount) || 0,
+          availableLimit: (parseFloat(card.limit_amount) || 0) - (parseFloat(card.current_balance) || 0),
         })),
         expensesByCategory,
         monthlyTrend: monthlyData,
@@ -503,16 +523,17 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Accounts Overview */}
+        {/* Accounts and Credit Cards Overview */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Suas Contas
           </h3>
           <div className="space-y-3">
+            {/* Contas Bancárias */}
             {data.accounts.length > 0 ? (
               data.accounts.map((account, index) => (
                 <div
-                  key={index}
+                  key={`account-${index}`}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                 >
                   <div className="flex items-center space-x-3">
@@ -533,9 +554,50 @@ export function Dashboard() {
                   </p>
                 </div>
               ))
-            ) : (
+            ) : null}
+
+            {/* Cartões de Crédito */}
+            {data.creditCards.length > 0 && (
+              <>
+                {data.accounts.length > 0 && (
+                  <div className="border-t border-gray-200 pt-3 mt-3">
+                    <p className="text-sm font-medium text-gray-700 mb-3">Cartões de Crédito</p>
+                  </div>
+                )}
+                {data.creditCards.map((card, index) => (
+                  <div
+                    key={`card-${index}`}
+                    className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-100"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <CreditCard className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {card.name}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Limite: {formatCurrency(card.limitAmount)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-purple-600">
+                        {formatCurrency(card.availableLimit)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Disponível
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {data.accounts.length === 0 && data.creditCards.length === 0 && (
               <div className="text-center text-gray-500 py-8">
-                Nenhuma conta encontrada
+                Nenhuma conta ou cartão encontrado
               </div>
             )}
           </div>
