@@ -459,6 +459,14 @@ export function PatientPayments() {
     return new Date(date).toLocaleString('pt-BR');
   };
 
+  // Filtrar pagamentos do mês atual
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(currentMonth);
+  
+  const monthlyPayments = payments.filter(payment => {
+    const paymentDate = parseISO(payment.payment_date);
+    return paymentDate >= monthStart && paymentDate <= monthEnd;
+  });
 
   const openModal = () => {
     setEditingPayment(null);
