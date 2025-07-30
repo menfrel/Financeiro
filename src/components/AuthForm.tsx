@@ -50,7 +50,7 @@ export function AuthForm() {
             <LogIn className="w-8 h-8 text-white" />
           </div>
           <h2 className="text-3xl font-bold text-gray-900">
-            Gestão
+            Gestão Psi
           </h2>
           <p className="mt-2 text-gray-600">
             {isLogin ? 'Entre na sua conta' : 'Crie sua conta gratuita'}

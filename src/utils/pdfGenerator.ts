@@ -409,7 +409,7 @@ export const generatePDFReport = async (data: ReportData, userEmail: string) => 
   pdf.setTextColor(107, 114, 128);
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('Sistema de Gestão Profissional', margin, footerY + 15);
+  pdf.text('Sistema de Gestão Psi Profissional', margin, footerY + 15);
   pdf.text('contato@gestao.com.br', margin, footerY + 25);
   
   // Page number
@@ -642,7 +642,7 @@ export const generateDetailedPDFReport = async (
     pdf.setTextColor(107, 114, 128);
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
-    pdf.text('Sistema de Gestão Profissional - Relatório Detalhado', margin, footerY + 15);
+    pdf.text('Sistema de Gestão Psi Profissional - Relatório Detalhado', margin, footerY + 15);
     pdf.text('contato@gestao.com.br', margin, footerY + 25);
     
     // Page number

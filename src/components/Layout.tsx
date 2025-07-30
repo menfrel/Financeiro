@@ -26,16 +26,15 @@ interface LayoutProps {
 
 const navigation = [
   { name: "Dashboard", icon: LayoutDashboard, key: "dashboard" },
+  { name: "Pacientes", icon: Users, key: "patients" },
+  { name: "Sessões", icon: Calendar, key: "sessions" },
+  { name: "Pagamentos", icon: DollarSign, key: "patient-payments" },
   { name: "Contas", icon: Wallet, key: "accounts" },
   { name: "Lançamentos", icon: ArrowUpDown, key: "transactions" },
-  { name: "Transferências", icon: ArrowRightLeft, key: "transfers" },
   { name: "Cartões", icon: CreditCard, key: "credit-cards" },
   { name: "Categorias", icon: PieChart, key: "categories" },
   { name: "Orçamentos", icon: Target, key: "budgets" },
   { name: "Relatórios", icon: FileText, key: "reports" },
-  { name: "Pacientes", icon: Users, key: "patients" },
-  { name: "Sessões", icon: Calendar, key: "sessions" },
-  { name: "Pagamentos", icon: DollarSign, key: "patient-payments" },
   { name: "Configurações", icon: Settings, key: "settings" },
 ];
 
@@ -71,7 +70,7 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
                   <LayoutDashboard className="w-5 h-5 text-white" />
                 </div>
                 <span className="ml-3 text-xl font-semibold text-gray-900">
-                  Gestão
+                  Gestão Psi
                 </span>
               </div>
               <nav className="mt-5 px-2 space-y-1">
@@ -116,7 +115,7 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
                 <LayoutDashboard className="w-5 h-5 text-white" />
               </div>
               <span className="ml-3 text-xl font-semibold text-gray-900">
-                Gestão
+                Gestão Psi
               </span>
             </div>
             <nav className="mt-5 flex-1 px-2 space-y-1">
@@ -170,7 +169,7 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
               <Menu className="h-6 w-6" />
             </button>
             <span className="text-lg font-semibold text-gray-900">
-              Gestão
+              Gestão Psi
             </span>
             <div className="w-8" />
           </div>
