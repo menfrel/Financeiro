@@ -90,8 +90,7 @@ export function Budgets() {
           categories (id, name, color, type)
         `)
         .eq("user_id", user.id)
-        .gte("start_date", format(startOfMonth(selectedMonth), "yyyy-MM-dd"))
-        .lte("end_date", format(endOfMonth(selectedMonth), "yyyy-MM-dd"))
+        .or(`start_date.lte.${format(endOfMonth(selectedMonth), "yyyy-MM-dd")},end_date.gte.${format(startOfMonth(selectedMonth), "yyyy-MM-dd")}`)
         .order("created_at", { ascending: false });
 
       if (budgetsError) {
