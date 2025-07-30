@@ -16,7 +16,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { format, parse, subMonths, addMonths } from "date-fns";
+import { format, parse, subMonths, addMonths, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface CreditCard {
