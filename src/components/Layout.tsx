@@ -71,7 +71,7 @@ export function Layout({ children, currentPage, onPageChange }: LayoutProps) {
                   <LayoutDashboard className="w-5 h-5 text-white" />
                 </div>
                 <span className="ml-3 text-xl font-semibold text-gray-900">
-                  FinanceApp
+                  Gestão
                 </span>
               </div>
               <nav className="mt-5 px-2 space-y-1">
