@@ -152,7 +152,7 @@ export class RecurringPaymentGenerator {
 
   private static getNextPaymentDate(currentDate: Date, frequency: 'weekly' | 'monthly', recurringDay: number): Date {
     if (frequency === 'weekly') {
-      return addDays(currentDate, 7);
+      return addDays(currentDate, 15); // Quinzenal = 15 dias
     } else {
       // Para frequência mensal
       let nextMonth = addMonths(currentDate, 1);
