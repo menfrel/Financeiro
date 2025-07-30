@@ -933,7 +933,7 @@ export function CreditCards() {
                           
                           {/* Action Buttons */}
                           <div className="flex items-center space-x-2">
-                            {transaction.installments > 1 && transaction.current_installment < transaction.installments && (
+                            {transaction.installments > 1 && transaction.current_installment >= 2 && (
                               <button
                                 onClick={() => handleAdvanceInstallment(transaction)}
                                 className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
