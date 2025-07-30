@@ -188,6 +188,7 @@ export function Budgets() {
         period: "monthly" as const,
         start_date: data.start_date,
         end_date: data.end_date,
+        description: data.description || null,
       };
 
       if (editingBudget) {
@@ -220,6 +221,7 @@ export function Budgets() {
     setValue("amount", budget.amount);
     setValue("start_date", budget.start_date);
     setValue("end_date", budget.end_date);
+    setValue("description", budget.description || "");
     setIsModalOpen(true);
   };
 
@@ -439,17 +441,10 @@ export function Budgets() {
                         {budget.category?.name || "Categoria não encontrada"}
                       </h3>
                       <p className="text-sm text-gray-600">
-                        {format(parse(budget.start_date, "yyyy-MM-dd", new Date()), "dd/MM", {
-                          locale: ptBR,
-                        })} - {format(parse(budget.end_date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", {
+                        {format(parse(budget.start_date, "yyyy-MM-dd", new Date()), "MMM yyyy", {
                           locale: ptBR,
                         })}
                       </p>
-                      {budget.description && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          {budget.description}
-                        </p>
-                      )}
                       {budget.category?.type && (
                         <p className="text-xs text-gray-500 capitalize">
                           {budget.category.type === "income"
@@ -589,6 +584,17 @@ export function Budgets() {
                     {errors.amount.message}
                   </p>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição (opcional)
+                </label>
+                <input
+                  {...register("description")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: Orçamento para gastos médicos"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
