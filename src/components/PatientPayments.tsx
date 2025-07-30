@@ -468,6 +468,14 @@ export function PatientPayments() {
     return paymentDate >= monthStart && paymentDate <= monthEnd;
   });
 
+  // Calcular estatísticas do mês selecionado
+  const monthlyStats = {
+    totalReceived: monthlyPayments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0),
+    totalPending: monthlyPayments.filter(p => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0),
+    totalOverdue: monthlyPayments.filter(p => p.status === 'overdue').reduce((sum, p) => sum + p.amount, 0),
+    totalRevenue: monthlyPayments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0)
+  };
+
   const openModal = () => {
     setEditingPayment(null);
     reset();
@@ -524,7 +532,7 @@ export function PatientPayments() {
             <div>
               <p className="text-sm font-medium text-gray-600">Total Recebido</p>
               <p className="text-2xl font-bold text-green-600">
-                {formatCurrency(payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0))}
+                {formatCurrency(monthlyStats.totalReceived)}
               </p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -538,7 +546,7 @@ export function PatientPayments() {
             <div>
               <p className="text-sm font-medium text-gray-600">Pendente</p>
               <p className="text-2xl font-bold text-yellow-600">
-                {formatCurrency(payments.filter(p => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0))}
+                {formatCurrency(monthlyStats.totalPending)}
               </p>
             </div>
             <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -552,7 +560,7 @@ export function PatientPayments() {
             <div>
               <p className="text-sm font-medium text-gray-600">Em Atraso</p>
               <p className="text-2xl font-bold text-red-600">
-                {formatCurrency(payments.filter(p => p.status === 'overdue').reduce((sum, p) => sum + p.amount, 0))}
+                {formatCurrency(monthlyStats.totalOverdue)}
               </p>
             </div>
             <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
@@ -564,12 +572,12 @@ export function PatientPayments() {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Ganho Líquido</p>
+              <p className="text-sm font-medium text-gray-600">Receita do Mês</p>
               <p className="text-2xl font-bold text-blue-600">
-                {formatCurrency(payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0))}
+                {formatCurrency(monthlyStats.totalRevenue)}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                Receita total
+                Apenas pagamentos recebidos
               </p>
             </div>
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
