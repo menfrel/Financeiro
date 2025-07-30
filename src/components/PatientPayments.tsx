@@ -30,6 +30,15 @@ import { MonthlyPaymentsView } from './MonthlyPaymentsView';
 import { RecurringPaymentGenerator } from '../utils/recurringPayments';
 import { format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { 
+  ChevronLeft, 
+  ChevronRight,
+  startOfMonth,
+  endOfMonth,
+  addMonths,
+  subMonths,
+  parseISO
+} from 'date-fns';
 
 interface Patient {
   id: string;
@@ -564,6 +573,35 @@ export function PatientPayments() {
         </div>
       </div>
 
+      {/* Navegação do Mês */}
+      <div className="flex items-center justify-between bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
+        <button
+          onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900">
+            {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+          </h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {filteredPayments.filter(payment => {
+              const paymentDate = parseISO(payment.payment_date);
+              return paymentDate >= startOfMonth(currentMonth) && paymentDate <= endOfMonth(currentMonth);
+            }).length} pagamento(s) no mês
+          </p>
+        </div>
+
+        <button
+          onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
+
       {/* Filtros */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
         <div className="flex flex-col sm:flex-row gap-4">
@@ -596,6 +634,7 @@ export function PatientPayments() {
 
       {/* Visualização Mensal */}
       <MonthlyPaymentsView
+        currentMonth={currentMonth}
         payments={filteredPayments}
         onPaymentClick={handleView}
         onEdit={handleEdit}

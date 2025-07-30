@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ChevronLeft, 
-  ChevronRight, 
   Calendar,
   CheckCircle,
   Clock,
@@ -45,6 +43,7 @@ interface MonthlyStats {
 }
 
 interface MonthlyPaymentsViewProps {
+  currentMonth: Date;
   payments: PatientPayment[];
   onPaymentClick: (payment: PatientPayment) => void;
   onEdit: (payment: PatientPayment) => void;
@@ -53,13 +52,13 @@ interface MonthlyPaymentsViewProps {
 }
 
 export function MonthlyPaymentsView({ 
+  currentMonth,
   payments, 
   onPaymentClick, 
   onEdit, 
   onDelete,
   onStatusChange 
 }: MonthlyPaymentsViewProps) {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [monthlyStats, setMonthlyStats] = useState<MonthlyStats>({
     totalReceived: 0,
     totalPending: 0,
@@ -106,14 +105,6 @@ export function MonthlyPaymentsView({
     }
   };
 
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    if (direction === 'prev') {
-      setCurrentMonth(subMonths(currentMonth, 1));
-    } else {
-      setCurrentMonth(addMonths(currentMonth, 1));
-    }
-  };
-
   // Filtrar pagamentos do mês atual
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -137,32 +128,6 @@ export function MonthlyPaymentsView({
 
   return (
     <div className="space-y-6">
-      {/* Navegação do Mês */}
-      <div className="flex items-center justify-between bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <button
-          onClick={() => navigateMonth('prev')}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900">
-            {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
-          </h2>
-          <p className="text-sm text-gray-600 mt-1">
-            {monthlyStats.paymentsCount} pagamento(s) no mês
-          </p>
-        </div>
-
-        <button
-          onClick={() => navigateMonth('next')}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
-      </div>
-
       {/* Lista de Pagamentos do Mês */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100">
