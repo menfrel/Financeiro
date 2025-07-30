@@ -93,7 +93,6 @@ export function PatientPayments() {
   const [viewingPayment, setViewingPayment] = useState<PatientPayment | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [calendarView, setCalendarView] = useState<"list" | "calendar">("list");
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const {
@@ -453,19 +452,6 @@ export function PatientPayments() {
     return new Date(date).toLocaleString('pt-BR');
   };
 
-  const navigateMonth = (direction: 'prev' | 'next' | 'today') => {
-    if (direction === 'today') {
-      setCurrentMonth(new Date());
-    } else {
-      const newMonth = new Date(currentMonth);
-      if (direction === 'prev') {
-        newMonth.setMonth(newMonth.getMonth() - 1);
-      } else {
-        newMonth.setMonth(newMonth.getMonth() + 1);
-      }
-      setCurrentMonth(newMonth);
-    }
-  };
 
   const openModal = () => {
     setEditingPayment(null);
@@ -474,18 +460,6 @@ export function PatientPayments() {
     setShowModal(true);
   };
 
-  // Calcular estatísticas
-  const totalPaid = filteredPayments
-    .filter(p => p.status === 'paid')
-    .reduce((sum, p) => sum + p.amount, 0);
-  
-  const totalPending = filteredPayments
-    .filter(p => p.status === 'pending')
-    .reduce((sum, p) => sum + p.amount, 0);
-  
-  const totalOverdue = filteredPayments
-    .filter(p => p.status === 'overdue')
-    .reduce((sum, p) => sum + p.amount, 0);
 
   if (loading) {
     return (
@@ -527,289 +501,45 @@ export function PatientPayments() {
         </button>
       </div>
 
-      {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Recebido</p>
-              <p className="text-2xl font-bold text-green-600">
-                {formatCurrency(totalPaid)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Pendente</p>
-              <p className="text-2xl font-bold text-yellow-600">
-                {formatCurrency(totalPending)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <Clock className="w-6 h-6 text-yellow-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Em Atraso</p>
-              <p className="text-2xl font-bold text-red-600">
-                {formatCurrency(totalOverdue)}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-              <AlertCircle className="w-6 h-6 text-red-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filtros e Toggle de Visualização */}
+      {/* Filtros */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
-        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
-          <div className="flex flex-col sm:flex-row gap-4 flex-1">
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar por paciente ou descrição..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
-              />
-            </div>
-            <div className="relative">
-              <Filter className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
-              >
-                <option value="all">Todos os status</option>
-                <option value="pending">Pendente</option>
-                <option value="paid">Pago</option>
-                <option value="overdue">Atrasado</option>
-                <option value="cancelled">Cancelado</option>
-              </select>
-            </div>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar por paciente ou descrição..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
+            />
           </div>
-
-          {/* Toggle de Visualização */}
-          <div className="flex items-center bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setCalendarView("list")}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                calendarView === "list"
-                  ? "bg-white text-blue-600 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
+          <div className="relative">
+            <Filter className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
             >
-              <List className="w-4 h-4" />
-              Lista
-            </button>
-            <button
-              onClick={() => setCalendarView("calendar")}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                calendarView === "calendar"
-                  ? "bg-white text-blue-600 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              <Calendar className="w-4 h-4" />
-              Mensal
-            </button>
+              <option value="all">Todos os status</option>
+              <option value="pending">Pendente</option>
+              <option value="paid">Pago</option>
+              <option value="overdue">Atrasado</option>
+              <option value="cancelled">Cancelado</option>
+            </select>
           </div>
         </div>
       </div>
 
-      {/* Conteúdo */}
-      {calendarView === "list" ? (
-        /* Visualização em Lista */
-        filteredPayments.length === 0 ? (
-          <div className="text-center py-12">
-            <DollarSign className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm || statusFilter !== 'all' 
-                ? "Nenhum pagamento encontrado" 
-                : "Nenhum pagamento cadastrado"
-              }
-            </h3>
-            <p className="text-gray-600 mb-6">
-              {searchTerm || statusFilter !== 'all'
-                ? "Tente ajustar os filtros de busca"
-                : "Cadastre o primeiro pagamento para começar"
-              }
-            </p>
-            <button
-              onClick={openModal}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
-            >
-              Novo Pagamento
-            </button>
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-6 border-b border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Todos os Pagamentos
-              </h3>
-            </div>
-
-            <div className="divide-y divide-gray-100">
-              {filteredPayments
-                .sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime())
-                .map((payment) => {
-                  const today = new Date();
-                  const paymentDate = new Date(payment.payment_date + 'T00:00:00');
-                  const isOverdue = payment.status === 'pending' && today > paymentDate;
-
-                  return (
-                    <div
-                      key={payment.id}
-                      className="p-6 hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                            <User className="w-6 h-6 text-white" />
-                          </div>
-                          
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-3 mb-2">
-                              <h4 className="font-semibold text-gray-900">
-                                {payment.patient?.name || 'Paciente não encontrado'}
-                              </h4>
-                              <span
-                                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
-                                  isOverdue ? 'bg-red-100 text-red-800 border-red-200' : getStatusColor(payment.status)
-                                }`}
-                              >
-                                {isOverdue ? <AlertTriangle className="w-3 h-3 mr-1" /> : getStatusIcon(payment.status)}
-                                {isOverdue ? 'Atrasado' : getStatusLabel(payment.status)}
-                              </span>
-                              {payment.is_recurring && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                  <Repeat className="w-3 h-3 mr-1" />
-                                  Recorrente
-                                </span>
-                              )}
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                              <div className="flex items-center space-x-2">
-                                <Calendar className="w-4 h-4" />
-                                <span>{formatDate(payment.payment_date)}</span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <DollarSign className="w-4 h-4" />
-                                <span className="font-semibold text-gray-900">
-                                  {formatCurrency(payment.amount)}
-                                </span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <span className="capitalize">{getPaymentMethodLabel(payment.payment_method)}</span>
-                              </div>
-                            </div>
-
-                            {payment.description && (
-                              <div className="mt-2 p-2 bg-gray-50 rounded-lg">
-                                <p className="text-sm text-gray-700">{payment.description}</p>
-                              </div>
-                            )}
-
-                            {payment.session && (
-                              <div className="mt-2 p-2 bg-blue-50 rounded-lg">
-                                <p className="text-sm text-blue-800">
-                                  <strong>Sessão:</strong> {formatDateTime(payment.session.session_date)} - {payment.session.session_type}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Botões de Ação */}
-                        <div className="flex items-center space-x-2">
-                          {/* Botões de Status */}
-                          {payment.status === 'pending' && (
-                            <button
-                              onClick={() => handleStatusChange(payment.id, 'paid')}
-                              className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                              <span>Marcar como Pago</span>
-                            </button>
-                          )}
-
-                          {payment.status === 'pending' && isOverdue && (
-                            <button
-                              onClick={() => handleStatusChange(payment.id, 'overdue')}
-                              className="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
-                            >
-                              <AlertTriangle className="w-4 h-4" />
-                              <span>Marcar Atrasado</span>
-                            </button>
-                          )}
-
-                          {payment.status === 'overdue' && (
-                            <button
-                              onClick={() => handleStatusChange(payment.id, 'paid')}
-                              className="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                              <span>Marcar como Pago</span>
-                            </button>
-                          )}
-
-                          {/* Botões de Ação Padrão */}
-                          <div className="flex space-x-1">
-                            <button
-                              onClick={() => handleView(payment)}
-                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Visualizar"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleEdit(payment)}
-                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Editar"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(payment.id)}
-                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Excluir"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-        )
-      ) : (
-        /* Visualização em Calendário */
-        <MonthlyPaymentsView
-          payments={filteredPayments}
-          onPaymentClick={handleView}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onStatusChange={handleStatusChange}
-        />
-      )}
+      {/* Visualização Mensal */}
+      <MonthlyPaymentsView
+        payments={filteredPayments}
+        onPaymentClick={handleView}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onStatusChange={handleStatusChange}
+      />
 
       {/* Modal Adicionar/Editar Pagamento */}
       {showModal && (
@@ -966,7 +696,7 @@ export function PatientPayments() {
                           })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                          <option value="weekly">Semanal</option>
+                          <option value="weekly">Quinzenal</option>
                           <option value="monthly">Mensal</option>
                         </select>
                         {errors.recurring_frequency && (
