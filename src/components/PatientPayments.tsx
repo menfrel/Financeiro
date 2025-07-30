@@ -31,8 +31,6 @@ import { RecurringPaymentGenerator } from '../utils/recurringPayments';
 import { format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
-  ChevronLeft, 
-  ChevronRight,
   startOfMonth,
   endOfMonth,
   addMonths,
