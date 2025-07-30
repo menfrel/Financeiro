@@ -12,6 +12,7 @@ import {
   TrendingDown,
   ChevronLeft,
   ChevronRight,
+  DollarSign,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format, startOfMonth, endOfMonth, isWithinInterval, parse, addMonths, subMonths } from "date-fns";
@@ -51,11 +52,18 @@ export function Budgets() {
   const { user } = useAuth();
   const [budgets, setBudgets] = useState<BudgetWithSpent[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+  
+  // Estados para o modal de pagamento
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [selectedBudgetForPayment, setSelectedBudgetForPayment] = useState<BudgetWithSpent | null>(null);
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
 
   const {
     register,
@@ -116,85 +124,148 @@ export function Budgets() {
         setCategories([]);
       }
 
-      setCategories(categoriesData || []);
+      // Load accounts - necessário para criar lançamentos
+      const { data: accountsData, error: accountsError } = await supabase
+        .from("accounts")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("name", { ascending: true });
 
-      // Calculate spent amounts for each budget
-      if (!budgetsData || budgetsData.length === 0) {
-        setBudgets([]);
-        setLoading(false);
-        return;
+      if (accountsError) {
+        console.error("Error loading accounts:", accountsError);
+        setAccounts([]);
       }
 
-      // Filtrar orçamentos que se sobrepõem ao mês selecionado
-      const filteredBudgets = budgetsData.filter(budget => {
-        const budgetStart = budget.start_date;
-        const budgetEnd = budget.end_date;
-        
-        // Verificar se o orçamento se sobrepõe ao mês selecionado
-        return budgetStart <= monthEnd && budgetEnd >= monthStart;
-      });
+      setCategories(categoriesData || []);
+      setAccounts(accountsData || []);
 
-      const budgetsWithSpent = await Promise.all(
-        filteredBudgets.map(async (budget) => {
-          // Verificar se a categoria existe
-          if (!budget.categories) {
-            console.warn(`Budget ${budget.id} has no category`);
+      // Calculate spent amounts for each budget
+      if (budgetsData && budgetsData.length > 0) {
+        // Filtrar orçamentos que se sobrepõem ao mês selecionado
+        const filteredBudgets = budgetsData.filter(budget => {
+          const budgetStart = new Date(budget.start_date);
+          const budgetEnd = new Date(budget.end_date);
+          const monthStart = startOfMonth(selectedMonth);
+          const monthEnd = endOfMonth(selectedMonth);
+          
+          // Verificar se o orçamento se sobrepõe ao mês selecionado
+          return budgetStart <= monthEnd && budgetEnd >= monthStart;
+        });
+
+        const budgetsWithSpent = await Promise.all(
+          filteredBudgets.map(async (budget) => {
+            const { data: transactions, error: transactionsError } =
+              await supabase
+                .from("transactions")
+                .select("amount")
+                .eq("user_id", user.id)
+                .eq("category_id", budget.category_id)
+                .eq("type", "expense")
+                .gte("date", budget.start_date)
+                .lte("date", budget.end_date);
+
+            if (transactionsError) {
+              console.error(
+                "Error loading transactions for budget:",
+                transactionsError,
+              );
+            }
+
+            const spent =
+              transactions?.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
+            const budgetAmount = parseFloat(budget.amount) || 0;
+            const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
+
+            let status: "safe" | "warning" | "danger" = "safe";
+            if (percentage >= 100) status = "danger";
+            else if (percentage >= 80) status = "warning";
+
             return {
               ...budget,
-              amount: parseFloat(budget.amount) || 0,
-              spent: 0,
-              percentage: 0,
-              status: 'safe' as const,
-              category: null
+              amount: budgetAmount,
+              category: budget.categories, // Corrigir o mapeamento da categoria
+              spent,
+              percentage,
+              status,
             };
-          }
+          }),
+        );
 
-          // Calcular período de interseção entre o orçamento e o mês selecionado
-          const intersectionStart = budget.start_date > monthStart ? budget.start_date : monthStart;
-          const intersectionEnd = budget.end_date < monthEnd ? budget.end_date : monthEnd;
-
-          const { data: transactions, error: transactionsError } =
-            await supabase
-              .from("transactions")
-              .select("amount")
-              .eq("user_id", user.id)
-              .eq("category_id", budget.category_id)
-              .eq("type", "expense")
-              .gte("date", intersectionStart)
-              .lte("date", intersectionEnd);
-
-          if (transactionsError) {
-            console.error(
-              "Error loading transactions for budget:",
-              transactionsError,
-            );
-          }
-
-          const spent =
-            transactions?.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
-          const budgetAmount = parseFloat(budget.amount) || 0;
-          const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
-
-          let status: "safe" | "warning" | "danger" = "safe";
-          if (percentage >= 100) status = "danger";
-          else if (percentage >= 80) status = "warning";
-
-          return {
-            ...budget,
-            amount: budgetAmount,
-            category: budget.categories,
-            spent,
-            percentage,
-            status,
-          };
-        })
-      );
-
-      setBudgets(budgetsWithSpent);
+        setBudgets(budgetsWithSpent);
+      } else {
+        setBudgets([]);
+      }
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMarkAsPaid = async (budget: BudgetWithSpent) => {
+    if (!accounts || accounts.length === 0) {
+      alert("Você precisa ter pelo menos uma conta cadastrada para criar o lançamento.");
+      return;
+    }
+
+    const amount = budget.amount - budget.spent; // Valor restante do orçamento
+
+    if (amount <= 0) {
+      alert("Este orçamento já foi totalmente pago ou não há valor restante.");
+      return;
+    }
+
+    // Abrir modal de confirmação com valor editável
+    setSelectedBudgetForPayment(budget);
+    setPaymentAmount(amount);
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!selectedBudgetForPayment || !accounts || accounts.length === 0) {
+      return;
+    }
+
+    if (paymentAmount <= 0) {
+      alert("O valor do pagamento deve ser maior que zero.");
+      return;
+    }
+
+    setPaymentSubmitting(true);
+
+    try {
+      const account = accounts[0]; // Usar a primeira conta disponível
+
+      // Criar lançamento no sistema financeiro
+      const { error: transactionError } = await supabase
+        .from("transactions")
+        .insert({
+          user_id: user!.id,
+          account_id: account.id,
+          category_id: selectedBudgetForPayment.category?.id,
+          amount: paymentAmount,
+          type: "expense",
+          description: `Pagamento - ${selectedBudgetForPayment.category?.name}${selectedBudgetForPayment.description ? ` - ${selectedBudgetForPayment.description}` : ''}`,
+          date: format(new Date(), "yyyy-MM-dd"),
+          is_recurring: false,
+        });
+
+      if (transactionError) {
+        console.error("Error creating transaction:", transactionError);
+        alert("Erro ao criar lançamento. Tente novamente.");
+        return;
+      }
+
+      alert(`Pagamento de ${formatCurrency(paymentAmount)} registrado com sucesso!`);
+      setIsPaymentModalOpen(false);
+      setSelectedBudgetForPayment(null);
+      setPaymentAmount(0);
+      await loadData(); // Recarregar dados para atualizar o gasto
+    } catch (error) {
+      console.error("Error marking budget as paid:", error);
+      alert("Erro ao registrar pagamento. Tente novamente.");
+    } finally {
+      setPaymentSubmitting(false);
     }
   };
 
@@ -570,6 +641,17 @@ export function Budgets() {
                       {formatCurrency(budget.amount - budget.spent)}
                     </span>
                   </div>
+
+                  {/* Botão Marcar como Pago */}
+                  {budget.amount - budget.spent > 0 && (
+                    <button
+                      onClick={() => handleMarkAsPaid(budget)}
+                      className="w-auto px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs transition-colors flex items-center space-x-1"
+                    >
+                      <DollarSign className="w-3 h-3" />
+                      <span>Pagar</span>
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -705,6 +787,78 @@ export function Budgets() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Pagamento */}
+      {isPaymentModalOpen && selectedBudgetForPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              Confirmar Pagamento
+            </h2>
+
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-medium text-gray-900 mb-2">
+                  {selectedBudgetForPayment.category?.name || "Categoria não encontrada"}
+                </h3>
+                {selectedBudgetForPayment.description && (
+                  <p className="text-sm text-gray-600 mb-2">
+                    {selectedBudgetForPayment.description}
+                  </p>
+                )}
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Orçamento:</span>
+                    <p className="font-medium">{formatCurrency(selectedBudgetForPayment.amount)}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Já gasto:</span>
+                    <p className="font-medium">{formatCurrency(selectedBudgetForPayment.spent)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Valor do Pagamento
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Valor restante disponível: {formatCurrency(selectedBudgetForPayment.amount - selectedBudgetForPayment.spent)}
+                </p>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPaymentModalOpen(false);
+                    setSelectedBudgetForPayment(null);
+                    setPaymentAmount(0);
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmPayment}
+                  disabled={paymentSubmitting || paymentAmount <= 0}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {paymentSubmitting ? "Confirmando..." : "Confirmar Pagamento"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
