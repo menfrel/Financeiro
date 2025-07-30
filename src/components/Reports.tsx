@@ -658,10 +658,14 @@ export function Reports() {
           </h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={reportData.monthlyTrend}>
+              <LineChart data={reportData.monthlyTrend} margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
-                <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                <YAxis 
+                  tickFormatter={(value) => formatCurrency(value)}
+                  width={80}
+                  tick={{ fontSize: 12 }}
+                />
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                 <Line
                   type="monotone"
@@ -732,10 +736,14 @@ export function Reports() {
         </h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={reportData.transactionsByCategory}>
+            <BarChart data={reportData.transactionsByCategory} margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
-              <YAxis tickFormatter={(value) => formatCurrency(value)} />
+              <YAxis 
+                tickFormatter={(value) => formatCurrency(value)}
+                width={80}
+                tick={{ fontSize: 12 }}
+              />
               <Tooltip formatter={(value) => formatCurrency(Number(value))} />
               <Bar dataKey="income" fill="#059669" name="Receitas" />
               <Bar dataKey="expense" fill="#DC2626" name="Despesas" />

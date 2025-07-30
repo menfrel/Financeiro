@@ -437,10 +437,14 @@ export function Dashboard() {
           </h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.monthlyTrend}>
+              <LineChart data={data.monthlyTrend} margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
-                <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                <YAxis 
+                  tickFormatter={(value) => formatCurrency(value)}
+                  width={80}
+                  tick={{ fontSize: 12 }}
+                />
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                 <Line
                   type="monotone"
