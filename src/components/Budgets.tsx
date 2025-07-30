@@ -82,6 +82,10 @@ export function Budgets() {
         return;
       }
 
+      // Calcular o período do mês selecionado
+      const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
+      const monthEnd = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
+
       // Load budgets - garantir isolamento por usuário
       const { data: budgetsData, error: budgetsError } = await supabase
         .from("budgets")
@@ -90,7 +94,6 @@ export function Budgets() {
           categories (id, name, color, type)
         `)
         .eq("user_id", user.id)
-        .or(`start_date.lte.${format(endOfMonth(selectedMonth), "yyyy-MM-dd")},end_date.gte.${format(startOfMonth(selectedMonth), "yyyy-MM-dd")}`)
         .order("created_at", { ascending: false });
 
       if (budgetsError) {
@@ -122,8 +125,17 @@ export function Budgets() {
         return;
       }
 
+      // Filtrar orçamentos que se sobrepõem ao mês selecionado
+      const filteredBudgets = budgetsData.filter(budget => {
+        const budgetStart = budget.start_date;
+        const budgetEnd = budget.end_date;
+        
+        // Verificar se o orçamento se sobrepõe ao mês selecionado
+        return budgetStart <= monthEnd && budgetEnd >= monthStart;
+      });
+
       const budgetsWithSpent = await Promise.all(
-        budgetsData.map(async (budget) => {
+        filteredBudgets.map(async (budget) => {
           // Verificar se a categoria existe
           if (!budget.categories) {
             console.warn(`Budget ${budget.id} has no category`);
@@ -137,6 +149,10 @@ export function Budgets() {
             };
           }
 
+          // Calcular período de interseção entre o orçamento e o mês selecionado
+          const intersectionStart = budget.start_date > monthStart ? budget.start_date : monthStart;
+          const intersectionEnd = budget.end_date < monthEnd ? budget.end_date : monthEnd;
+
           const { data: transactions, error: transactionsError } =
             await supabase
               .from("transactions")
@@ -144,8 +160,8 @@ export function Budgets() {
               .eq("user_id", user.id)
               .eq("category_id", budget.category_id)
               .eq("type", "expense")
-              .gte("date", budget.start_date)
-              .lte("date", budget.end_date);
+              .gte("date", intersectionStart)
+              .lte("date", intersectionEnd);
 
           if (transactionsError) {
             console.error(
