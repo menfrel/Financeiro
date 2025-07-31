@@ -638,8 +638,6 @@ export function Budgets() {
                         backgroundColor: budget.category?.color || "#6B7280",
                       }}
                     />
-                    />
-                    <div>
                       <h3 className="font-semibold text-gray-900">
                         {budget.category?.name || "Categoria não encontrada"}
                       </h3>
