@@ -637,19 +637,7 @@ export function Budgets() {
                       style={{
                         backgroundColor: budget.category?.color || "#6B7280",
                       }}
-                  <div className="flex items-center space-x-2 mb-2">
-                    {selectedBudgetForPayment.payment_method === "credit_card" ? (
-                      <>
-                        <CreditCard className="w-4 h-4 text-purple-600" />
-                        <span className="text-sm text-purple-600 font-medium">Pagamento no Cartão de Crédito</span>
-                      </>
-                    ) : (
-                      <>
-                        <DollarSign className="w-4 h-4 text-green-600" />
-                        <span className="text-sm text-green-600 font-medium">Pagamento em Conta</span>
-                      </>
-                    )}
-                  </div>
+                    />
                     />
                     <div>
                       <h3 className="font-semibold text-gray-900">
