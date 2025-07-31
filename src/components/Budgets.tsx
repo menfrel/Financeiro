@@ -45,12 +45,25 @@ interface BudgetForm {
   credit_card_id?: string;
 }
 
+interface BudgetPayment {
+  id: string;
+  budget_id: string;
+  month: string; // formato: "2024-07"
+  amount: number;
+  paid: boolean;
+  payment_date?: string;
+  created_at: string;
+}
+
 interface BudgetWithSpent extends Budget {
   spent: number;
   percentage: number;
   status: "safe" | "warning" | "danger";
   payment_method?: "account" | "credit_card";
   credit_card_id?: string;
+  monthlyPayments: BudgetPayment[];
+  currentMonthPaid: boolean;
+  currentMonthAmount: number;
 }
 
 export function Budgets() {
@@ -71,6 +84,7 @@ export function Budgets() {
   const [selectedBudgetForPayment, setSelectedBudgetForPayment] = useState<BudgetWithSpent | null>(null);
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
 
+
   const {
     register,
     handleSubmit,
@@ -81,6 +95,7 @@ export function Budgets() {
   } = useForm<BudgetForm>();
 
   const watchPaymentMethod = watch("payment_method");
+  
   useEffect(() => {
     if (user) {
       loadData();
@@ -91,18 +106,17 @@ export function Budgets() {
     try {
       setLoading(true);
 
-      // Verificar se o usuário está autenticado
       if (!user?.id) {
         console.error("Usuário não autenticado");
         setLoading(false);
         return;
       }
 
-      // Calcular o período do mês selecionado
       const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
       const monthEnd = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
+      const currentMonthKey = format(selectedMonth, "yyyy-MM");
 
-      // Load budgets - garantir isolamento por usuário
+      // Load budgets
       const { data: budgetsData, error: budgetsError } = await supabase
         .from("budgets")
         .select(`
@@ -119,7 +133,7 @@ export function Budgets() {
         return;
       }
 
-      // Load expense categories - garantir isolamento por usuário
+      // Load categories
       const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
         .select("*")
@@ -132,7 +146,7 @@ export function Budgets() {
         setCategories([]);
       }
 
-      // Load accounts - necessário para criar lançamentos
+      // Load accounts
       const { data: accountsData, error: accountsError } = await supabase
         .from("accounts")
         .select("*")
@@ -162,14 +176,12 @@ export function Budgets() {
 
       // Calculate spent amounts for each budget
       if (budgetsData && budgetsData.length > 0) {
-        // Filtrar orçamentos que se sobrepõem ao mês selecionado
         const filteredBudgets = budgetsData.filter(budget => {
           const budgetStart = new Date(budget.start_date);
           const budgetEnd = new Date(budget.end_date);
           const monthStart = startOfMonth(selectedMonth);
           const monthEnd = endOfMonth(selectedMonth);
           
-          // Verificar se o orçamento se sobrepõe ao mês selecionado
           return budgetStart <= monthEnd && budgetEnd >= monthStart;
         });
 
@@ -177,15 +189,17 @@ export function Budgets() {
           filteredBudgets.map(async (budget) => {
             let spent = 0;
 
+            // Buscar gastos apenas da categoria específica do orçamento
             if (budget.payment_method === "credit_card" && budget.credit_card_id) {
-              // Buscar gastos no cartão de crédito
+              // Buscar gastos no cartão de crédito da categoria específica
               const { data: creditCardTransactions, error: creditCardError } = await supabase
                 .from("credit_card_transactions")
-                .select("amount")
+                .select("amount, category_id")
                 .eq("user_id", user.id)
                 .eq("credit_card_id", budget.credit_card_id)
-                .gte("date", budget.start_date)
-                .lte("date", budget.end_date);
+                .eq("category_id", budget.category_id) // Filtrar por categoria específica
+                .gte("date", monthStart)
+                .lte("date", monthEnd);
 
               if (creditCardError) {
                 console.error("Error loading credit card transactions for budget:", creditCardError);
@@ -193,15 +207,15 @@ export function Budgets() {
                 spent = creditCardTransactions?.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
               }
             } else {
-              // Buscar gastos nas contas (comportamento original)
+              // Buscar gastos nas contas da categoria específica
               const { data: transactions, error: transactionsError } = await supabase
                 .from("transactions")
                 .select("amount")
                 .eq("user_id", user.id)
                 .eq("category_id", budget.category_id)
                 .eq("type", "expense")
-                .gte("date", budget.start_date)
-                .lte("date", budget.end_date);
+                .gte("date", monthStart)
+                .lte("date", monthEnd);
 
               if (transactionsError) {
                 console.error("Error loading transactions for budget:", transactionsError);
@@ -209,6 +223,21 @@ export function Budgets() {
                 spent = transactions?.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
               }
             }
+
+            // Buscar pagamentos mensais do orçamento (apenas do mês atual para performance)
+            const { data: monthlyPayments, error: paymentsError } = await supabase
+              .from("budget_payments")
+              .select("*")
+              .eq("budget_id", budget.id)
+              .eq("month", currentMonthKey);
+
+            if (paymentsError) {
+              console.error("Error loading budget payments:", paymentsError);
+            }
+
+            const currentMonthPayment = monthlyPayments?.[0] || null;
+            const currentMonthPaid = currentMonthPayment?.paid || false;
+            const currentMonthAmount = currentMonthPayment?.amount || 0;
 
             const budgetAmount = parseFloat(budget.amount) || 0;
             const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
@@ -220,12 +249,15 @@ export function Budgets() {
             return {
               ...budget,
               amount: budgetAmount,
-              category: budget.categories, // Corrigir o mapeamento da categoria
+              category: budget.categories,
               payment_method: budget.payment_method || "account",
               credit_card_id: budget.credit_card_id,
               spent,
               percentage,
               status,
+              monthlyPayments: monthlyPayments || [],
+              currentMonthPaid,
+              currentMonthAmount,
             };
           }),
         );
@@ -241,6 +273,8 @@ export function Budgets() {
     }
   };
 
+
+
   const handleMarkAsPaid = async (budget: BudgetWithSpent) => {
     if (budget.payment_method === "credit_card" && (!creditCards || creditCards.length === 0)) {
       alert("Você precisa ter pelo menos um cartão de crédito cadastrado para criar o lançamento.");
@@ -252,6 +286,7 @@ export function Budgets() {
       return;
     }
 
+    const currentMonthKey = format(selectedMonth, "yyyy-MM");
     const amount = budget.amount - budget.spent; // Valor restante do orçamento
 
     if (amount <= 0) {
@@ -259,7 +294,6 @@ export function Budgets() {
       return;
     }
 
-    // Abrir modal de confirmação com valor editável
     setSelectedBudgetForPayment(budget);
     setPaymentAmount(amount);
     setIsPaymentModalOpen(true);
@@ -278,6 +312,59 @@ export function Budgets() {
     setPaymentSubmitting(true);
 
     try {
+      const currentMonthKey = format(selectedMonth, "yyyy-MM");
+      const today = format(new Date(), "yyyy-MM-dd");
+
+      // Criar ou atualizar registro de pagamento mensal
+      const { data: existingPayment, error: checkError } = await supabase
+        .from("budget_payments")
+        .select("*")
+        .eq("budget_id", selectedBudgetForPayment.id)
+        .eq("month", currentMonthKey)
+        .single();
+
+      let paymentRecordId = existingPayment?.id;
+
+      if (!existingPayment) {
+        // Criar novo registro de pagamento
+        const { data: newPayment, error: createError } = await supabase
+          .from("budget_payments")
+          .insert({
+            budget_id: selectedBudgetForPayment.id,
+            month: currentMonthKey,
+            amount: paymentAmount,
+            paid: true,
+            payment_date: today,
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error("Error creating payment record:", createError);
+          alert("Erro ao registrar pagamento. Tente novamente.");
+          return;
+        }
+
+        paymentRecordId = newPayment.id;
+      } else {
+        // Atualizar registro existente
+        const { error: updateError } = await supabase
+          .from("budget_payments")
+          .update({
+            amount: existingPayment.amount + paymentAmount,
+            paid: true,
+            payment_date: today,
+          })
+          .eq("id", existingPayment.id);
+
+        if (updateError) {
+          console.error("Error updating payment record:", updateError);
+          alert("Erro ao atualizar pagamento. Tente novamente.");
+          return;
+        }
+      }
+
+      // Criar lançamento financeiro
       if (selectedBudgetForPayment.payment_method === "credit_card" && selectedBudgetForPayment.credit_card_id) {
         // Criar lançamento no cartão de crédito
         const { error: creditCardError } = await supabase
@@ -285,9 +372,10 @@ export function Budgets() {
           .insert({
             user_id: user!.id,
             credit_card_id: selectedBudgetForPayment.credit_card_id,
+            category_id: selectedBudgetForPayment.category?.id,
             amount: paymentAmount,
-            description: `Pagamento - ${selectedBudgetForPayment.category?.name}${selectedBudgetForPayment.description ? ` - ${selectedBudgetForPayment.description}` : ''}`,
-            date: format(new Date(), "yyyy-MM-dd"),
+            description: `Pagamento Orçamento - ${selectedBudgetForPayment.category?.name}${selectedBudgetForPayment.description ? ` - ${selectedBudgetForPayment.description}` : ''}`,
+            date: today,
             installments: 1,
             current_installment: 1,
           });
@@ -314,8 +402,8 @@ export function Budgets() {
           }
         }
       } else {
-        // Criar lançamento na conta (comportamento original)
-        const account = accounts[0]; // Usar a primeira conta disponível
+        // Criar lançamento na conta
+        const account = accounts[0];
 
         const { error: transactionError } = await supabase
           .from("transactions")
@@ -325,8 +413,8 @@ export function Budgets() {
             category_id: selectedBudgetForPayment.category?.id,
             amount: paymentAmount,
             type: "expense",
-            description: `Pagamento - ${selectedBudgetForPayment.category?.name}${selectedBudgetForPayment.description ? ` - ${selectedBudgetForPayment.description}` : ''}`,
-            date: format(new Date(), "yyyy-MM-dd"),
+            description: `Pagamento Orçamento - ${selectedBudgetForPayment.category?.name}${selectedBudgetForPayment.description ? ` - ${selectedBudgetForPayment.description}` : ''}`,
+            date: today,
             is_recurring: false,
           });
 
@@ -349,6 +437,8 @@ export function Budgets() {
       setPaymentSubmitting(false);
     }
   };
+
+
 
   const onSubmit = async (data: BudgetForm) => {
     try {
@@ -673,28 +763,40 @@ export function Budgets() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(budget.status)}`}
-                    >
-                      <StatusIcon className="w-3 h-3 inline mr-1" />
-                      {budget.percentage.toFixed(0)}%
-                    </span>
-                    <div className="flex space-x-1">
-                      <button
-                        onClick={() => handleEdit(budget)}
-                        className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(budget.id)}
-                        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                                     <div className="flex flex-col items-end space-y-2">
+                     <div className="flex items-center space-x-1">
+                       <span
+                         className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(budget.status)}`}
+                       >
+                         <StatusIcon className="w-3 h-3 inline mr-1" />
+                         {budget.percentage.toFixed(0)}%
+                       </span>
+                       <div className="flex space-x-1">
+                         <button
+                           onClick={() => handleEdit(budget)}
+                           className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                         >
+                           <Edit2 className="w-4 h-4" />
+                         </button>
+                         <button
+                           onClick={() => handleDelete(budget.id)}
+                           className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                         >
+                           <Trash2 className="w-4 h-4" />
+                         </button>
+                       </div>
+                     </div>
+                     
+                     {/* Botão Marcar Pago */}
+                     {!budget.currentMonthPaid && budget.amount - budget.spent > 0 && (
+                       <button
+                         onClick={() => handleMarkAsPaid(budget)}
+                         className="px-3 py-1.5 bg-green-600 text-white hover:bg-green-700 rounded-md text-xs font-medium transition-colors shadow-sm"
+                       >
+                         $ Pagar
+                       </button>
+                     )}
+                   </div>
                 </div>
 
                 <div className="space-y-3">
@@ -728,41 +830,18 @@ export function Budgets() {
                     </span>
                   </div>
 
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Restante</span>
-                    <span
-                      className={`font-semibold ${
-                        budget.amount - budget.spent >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {formatCurrency(budget.amount - budget.spent)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center space-x-1">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(budget.status)}`}
-                    >
-                      <StatusIcon className="w-3 h-3 inline mr-1" />
-                      {budget.percentage.toFixed(0)}%
-                    </span>
-                    <div className="flex space-x-1">
-                      <button
-                        onClick={() => handleEdit(budget)}
-                        className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(budget.id)}
-                        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                                     <div className="flex justify-between items-center">
+                     <span className="text-sm text-gray-600">Restante</span>
+                     <span
+                       className={`font-semibold ${
+                         budget.amount - budget.spent >= 0
+                           ? "text-green-600"
+                           : "text-red-600"
+                       }`}
+                     >
+                       {formatCurrency(budget.amount - budget.spent)}
+                     </span>
+                   </div>
                 </div>
               </div>
             );
