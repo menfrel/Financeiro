@@ -40,12 +40,16 @@ interface BudgetForm {
   description?: string;
   start_date: string;
   end_date: string;
+  payment_method: "account" | "credit_card";
+  credit_card_id?: string;
 }
 
 interface BudgetWithSpent extends Budget {
   spent: number;
   percentage: number;
   status: "safe" | "warning" | "danger";
+  payment_method?: "account" | "credit_card";
+  credit_card_id?: string;
 }
 
 export function Budgets() {
@@ -53,6 +57,7 @@ export function Budgets() {
   const [budgets, setBudgets] = useState<BudgetWithSpent[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [creditCards, setCreditCards] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,9 +75,11 @@ export function Budgets() {
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<BudgetForm>();
 
+  const watchPaymentMethod = watch("payment_method");
   useEffect(() => {
     if (user) {
       loadData();
@@ -136,8 +143,21 @@ export function Budgets() {
         setAccounts([]);
       }
 
+      // Load credit cards
+      const { data: creditCardsData, error: creditCardsError } = await supabase
+        .from("credit_cards")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("name", { ascending: true });
+
+      if (creditCardsError) {
+        console.error("Error loading credit cards:", creditCardsError);
+        setCreditCards([]);
+      }
+
       setCategories(categoriesData || []);
       setAccounts(accountsData || []);
+      setCreditCards(creditCardsData || []);
 
       // Calculate spent amounts for each budget
       if (budgetsData && budgetsData.length > 0) {
@@ -154,8 +174,26 @@ export function Budgets() {
 
         const budgetsWithSpent = await Promise.all(
           filteredBudgets.map(async (budget) => {
-            const { data: transactions, error: transactionsError } =
-              await supabase
+            let spent = 0;
+
+            if (budget.payment_method === "credit_card" && budget.credit_card_id) {
+              // Buscar gastos no cartão de crédito
+              const { data: creditCardTransactions, error: creditCardError } = await supabase
+                .from("credit_card_transactions")
+                .select("amount")
+                .eq("user_id", user.id)
+                .eq("credit_card_id", budget.credit_card_id)
+                .gte("date", budget.start_date)
+                .lte("date", budget.end_date);
+
+              if (creditCardError) {
+                console.error("Error loading credit card transactions for budget:", creditCardError);
+              } else {
+                spent = creditCardTransactions?.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
+              }
+            } else {
+              // Buscar gastos nas contas (comportamento original)
+              const { data: transactions, error: transactionsError } = await supabase
                 .from("transactions")
                 .select("amount")
                 .eq("user_id", user.id)
@@ -164,15 +202,13 @@ export function Budgets() {
                 .gte("date", budget.start_date)
                 .lte("date", budget.end_date);
 
-            if (transactionsError) {
-              console.error(
-                "Error loading transactions for budget:",
-                transactionsError,
-              );
+              if (transactionsError) {
+                console.error("Error loading transactions for budget:", transactionsError);
+              } else {
+                spent = transactions?.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
+              }
             }
 
-            const spent =
-              transactions?.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0) || 0;
             const budgetAmount = parseFloat(budget.amount) || 0;
             const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
 
@@ -184,6 +220,8 @@ export function Budgets() {
               ...budget,
               amount: budgetAmount,
               category: budget.categories, // Corrigir o mapeamento da categoria
+              payment_method: budget.payment_method || "account",
+              credit_card_id: budget.credit_card_id,
               spent,
               percentage,
               status,
@@ -203,7 +241,12 @@ export function Budgets() {
   };
 
   const handleMarkAsPaid = async (budget: BudgetWithSpent) => {
-    if (!accounts || accounts.length === 0) {
+    if (budget.payment_method === "credit_card" && (!creditCards || creditCards.length === 0)) {
+      alert("Você precisa ter pelo menos um cartão de crédito cadastrado para criar o lançamento.");
+      return;
+    }
+    
+    if (budget.payment_method === "account" && (!accounts || accounts.length === 0)) {
       alert("Você precisa ter pelo menos uma conta cadastrada para criar o lançamento.");
       return;
     }
@@ -222,7 +265,7 @@ export function Budgets() {
   };
 
   const handleConfirmPayment = async () => {
-    if (!selectedBudgetForPayment || !accounts || accounts.length === 0) {
+    if (!selectedBudgetForPayment) {
       return;
     }
 
@@ -234,26 +277,63 @@ export function Budgets() {
     setPaymentSubmitting(true);
 
     try {
-      const account = accounts[0]; // Usar a primeira conta disponível
+      if (selectedBudgetForPayment.payment_method === "credit_card" && selectedBudgetForPayment.credit_card_id) {
+        // Criar lançamento no cartão de crédito
+        const { error: creditCardError } = await supabase
+          .from("credit_card_transactions")
+          .insert({
+            user_id: user!.id,
+            credit_card_id: selectedBudgetForPayment.credit_card_id,
+            amount: paymentAmount,
+            description: `Pagamento - ${selectedBudgetForPayment.category?.name}${selectedBudgetForPayment.description ? ` - ${selectedBudgetForPayment.description}` : ''}`,
+            date: format(new Date(), "yyyy-MM-dd"),
+            installments: 1,
+            current_installment: 1,
+          });
 
-      // Criar lançamento no sistema financeiro
-      const { error: transactionError } = await supabase
-        .from("transactions")
-        .insert({
-          user_id: user!.id,
-          account_id: account.id,
-          category_id: selectedBudgetForPayment.category?.id,
-          amount: paymentAmount,
-          type: "expense",
-          description: `Pagamento - ${selectedBudgetForPayment.category?.name}${selectedBudgetForPayment.description ? ` - ${selectedBudgetForPayment.description}` : ''}`,
-          date: format(new Date(), "yyyy-MM-dd"),
-          is_recurring: false,
-        });
+        if (creditCardError) {
+          console.error("Error creating credit card transaction:", creditCardError);
+          alert("Erro ao criar lançamento no cartão. Tente novamente.");
+          return;
+        }
 
-      if (transactionError) {
-        console.error("Error creating transaction:", transactionError);
-        alert("Erro ao criar lançamento. Tente novamente.");
-        return;
+        // Atualizar saldo do cartão
+        const creditCard = creditCards.find(c => c.id === selectedBudgetForPayment.credit_card_id);
+        if (creditCard) {
+          const { error: updateCardError } = await supabase
+            .from("credit_cards")
+            .update({
+              current_balance: creditCard.current_balance + paymentAmount,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", selectedBudgetForPayment.credit_card_id);
+
+          if (updateCardError) {
+            console.error("Error updating credit card balance:", updateCardError);
+          }
+        }
+      } else {
+        // Criar lançamento na conta (comportamento original)
+        const account = accounts[0]; // Usar a primeira conta disponível
+
+        const { error: transactionError } = await supabase
+          .from("transactions")
+          .insert({
+            user_id: user!.id,
+            account_id: account.id,
+            category_id: selectedBudgetForPayment.category?.id,
+            amount: paymentAmount,
+            type: "expense",
+            description: `Pagamento - ${selectedBudgetForPayment.category?.name}${selectedBudgetForPayment.description ? ` - ${selectedBudgetForPayment.description}` : ''}`,
+            date: format(new Date(), "yyyy-MM-dd"),
+            is_recurring: false,
+          });
+
+        if (transactionError) {
+          console.error("Error creating transaction:", transactionError);
+          alert("Erro ao criar lançamento. Tente novamente.");
+          return;
+        }
       }
 
       alert(`Pagamento de ${formatCurrency(paymentAmount)} registrado com sucesso!`);
@@ -281,6 +361,8 @@ export function Budgets() {
         period: "monthly" as const,
         start_date: data.start_date,
         end_date: data.end_date,
+        payment_method: data.payment_method,
+        credit_card_id: data.payment_method === "credit_card" ? data.credit_card_id : null,
       };
 
       if (editingBudget) {
@@ -314,6 +396,8 @@ export function Budgets() {
     setValue("description", budget.description || "");
     setValue("start_date", budget.start_date);
     setValue("end_date", budget.end_date);
+    setValue("payment_method", budget.payment_method || "account");
+    setValue("credit_card_id", budget.credit_card_id || "");
     setIsModalOpen(true);
   };
 
@@ -340,6 +424,7 @@ export function Budgets() {
     const endDate = endOfMonth(selectedMonth);
     setValue("start_date", format(startDate, "yyyy-MM-dd"));
     setValue("end_date", format(endDate, "yyyy-MM-dd"));
+    setValue("payment_method", "account");
     setIsModalOpen(true);
   };
 
@@ -552,6 +637,19 @@ export function Budgets() {
                       style={{
                         backgroundColor: budget.category?.color || "#6B7280",
                       }}
+                  <div className="flex items-center space-x-2 mb-2">
+                    {selectedBudgetForPayment.payment_method === "credit_card" ? (
+                      <>
+                        <CreditCard className="w-4 h-4 text-purple-600" />
+                        <span className="text-sm text-purple-600 font-medium">Pagamento no Cartão de Crédito</span>
+                      </>
+                    ) : (
+                      <>
+                        <DollarSign className="w-4 h-4 text-green-600" />
+                        <span className="text-sm text-green-600 font-medium">Pagamento em Conta</span>
+                      </>
+                    )}
+                  </div>
                     />
                     <div>
                       <h3 className="font-semibold text-gray-900">
@@ -565,6 +663,19 @@ export function Budgets() {
                           {budget.description}
                         </p>
                       )}
+                      <div className="flex items-center space-x-2 mt-1">
+                        {budget.payment_method === "credit_card" ? (
+                          <>
+                            <CreditCard className="w-3 h-3 text-purple-600" />
+                            <span className="text-xs text-purple-600">Cartão de Crédito</span>
+                          </>
+                        ) : (
+                          <>
+                            <DollarSign className="w-3 h-3 text-green-600" />
+                            <span className="text-xs text-green-600">Conta Bancária</span>
+                          </>
+                        )}
+                      </div>
                       {budget.category?.type && (
                         <p className="text-xs text-gray-500 capitalize">
                           {budget.category.type === "income"
@@ -646,10 +757,23 @@ export function Budgets() {
                   {budget.amount - budget.spent > 0 && (
                     <button
                       onClick={() => handleMarkAsPaid(budget)}
-                      className="w-auto px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs transition-colors flex items-center space-x-1"
+                      className={`w-auto px-3 py-1.5 text-white rounded-lg text-xs transition-colors flex items-center space-x-1 ${
+                        budget.payment_method === "credit_card" 
+                          ? "bg-purple-600 hover:bg-purple-700" 
+                          : "bg-green-600 hover:bg-green-700"
+                      }`}
                     >
-                      <DollarSign className="w-3 h-3" />
-                      <span>Pagar</span>
+                      {budget.payment_method === "credit_card" ? (
+                        <>
+                          <CreditCard className="w-3 h-3" />
+                          <span>Pagar no Cartão</span>
+                        </>
+                      ) : (
+                        <>
+                          <DollarSign className="w-3 h-3" />
+                          <span>Pagar</span>
+                        </>
+                      )}
                     </button>
                   )}
                 </div>
@@ -716,6 +840,52 @@ export function Budgets() {
                   </p>
                 )}
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Método de Pagamento
+                </label>
+                <select
+                  {...register("payment_method", {
+                    required: "Método de pagamento é obrigatório",
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="account">Conta Bancária</option>
+                  <option value="credit_card">Cartão de Crédito</option>
+                </select>
+                {errors.payment_method && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {errors.payment_method.message}
+                  </p>
+                )}
+              </div>
+
+              {watchPaymentMethod === "credit_card" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Cartão de Crédito
+                  </label>
+                  <select
+                    {...register("credit_card_id", {
+                      required: watchPaymentMethod === "credit_card" ? "Cartão é obrigatório" : false,
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione o cartão</option>
+                    {creditCards.map((card) => (
+                      <option key={card.id} value={card.id}>
+                        {card.name} - Limite: {formatCurrency(card.limit_amount)}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.credit_card_id && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {errors.credit_card_id.message}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -853,7 +1023,11 @@ export function Budgets() {
                 <button
                   onClick={handleConfirmPayment}
                   disabled={paymentSubmitting || paymentAmount <= 0}
-                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 ${
+                    selectedBudgetForPayment?.payment_method === "credit_card"
+                      ? "bg-purple-600 hover:bg-purple-700"
+                      : "bg-green-600 hover:bg-green-700"
+                  }`}
                 >
                   {paymentSubmitting ? "Confirmando..." : "Confirmar Pagamento"}
                 </button>
