@@ -199,7 +199,7 @@ export function MonthlyPaymentsView({
 
                           {payment.description && (
                             <div className="mt-2 p-2 bg-gray-50 rounded-lg">
-                              <p className="text-sm text-gray-700">{payment.description}</p>
+                              <p className="text-sm text-gray-700 truncate">{payment.description}</p>
                             </div>
                           )}
                         </div>

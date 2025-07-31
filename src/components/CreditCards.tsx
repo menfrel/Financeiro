@@ -626,20 +626,20 @@ export function CreditCards() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-8 space-y-4 lg:space-y-0">
+    <div className="p-4 sm:p-6">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-6 sm:mb-8 space-y-4 lg:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Cartões de Crédito</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Cartões de Crédito</h1>
           <p className="text-gray-600 mt-2">
             Gerencie seus cartões e faturas
           </p>
         </div>
         
-        <div className="flex space-x-3">
-          <div className="flex bg-gray-100 rounded-lg p-1">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+          <div className="flex bg-gray-100 rounded-lg p-1 w-full sm:w-auto">
             <button
               onClick={() => setViewMode("cards")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-sm font-medium transition-all ${
                 viewMode === "cards"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-gray-600 hover:text-gray-900"
@@ -649,7 +649,7 @@ export function CreditCards() {
             </button>
             <button
               onClick={() => setViewMode("transactions")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-sm font-medium transition-all ${
                 viewMode === "transactions"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-gray-600 hover:text-gray-900"
@@ -658,20 +658,22 @@ export function CreditCards() {
               Transações
             </button>
           </div>
-          <button
-            onClick={openTransactionModal}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-          >
-            <DollarSign className="w-4 h-4" />
-            <span>Nova Compra</span>
-          </button>
-          <button
-            onClick={openCardModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Novo Cartão</span>
-          </button>
+          <div className="flex gap-2 sm:gap-3">
+            <button
+              onClick={openTransactionModal}
+              className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
+            >
+              <DollarSign className="w-4 h-4" />
+              <span>Nova Compra</span>
+            </button>
+            <button
+              onClick={openCardModal}
+              className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Novo Cartão</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -684,7 +686,7 @@ export function CreditCards() {
             placeholder="Buscar cartões..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           />
         </div>
       </div>
@@ -712,7 +714,7 @@ export function CreditCards() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {filteredCards.map((card) => {
               const status = getCardStatus(card);
               const usagePercentage = (card.current_balance / card.limit_amount) * 100;
@@ -720,15 +722,15 @@ export function CreditCards() {
               return (
                 <div
                   key={card.id}
-                  className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                  className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                        <CreditCard className="w-6 h-6 text-white" />
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                        <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900">{card.name}</h3>
+                        <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{card.name}</h3>
                         <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                           status.color === 'red' ? 'bg-red-100 text-red-800' :
                           status.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
@@ -755,12 +757,12 @@ export function CreditCards() {
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     {/* Saldo Atual */}
                     <div>
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm text-gray-600">Fatura Atual</span>
-                        <span className="font-semibold text-gray-900">
+                        <span className="text-xs sm:text-sm text-gray-600">Fatura Atual</span>
+                        <span className="font-semibold text-gray-900 text-sm sm:text-base">
                           {formatCurrency(card.current_balance)}
                         </span>
                       </div>
@@ -781,7 +783,7 @@ export function CreditCards() {
                     </div>
 
                     {/* Informações do Cartão */}
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
                       <div>
                         <span className="text-gray-500">Fechamento</span>
                         <p className="font-medium">Dia {card.closing_day}</p>
@@ -793,19 +795,16 @@ export function CreditCards() {
                     </div>
 
                     {/* Ações */}
-                    <div className="flex space-x-2 pt-2">
+                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
                       <button
                         onClick={() => openPaymentModal(card.id)}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs sm:text-sm transition-colors"
                       >
                         Pagar Fatura
                       </button>
                       <button
-                        onClick={() => {
-                          setSelectedCard(card.id);
-                          openTransactionModal();
-                        }}
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+                        onClick={() => openTransactionModal()}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs sm:text-sm transition-colors"
                       >
                         Nova Compra
                       </button>
@@ -901,9 +900,9 @@ export function CreditCards() {
                             <CreditCard className="w-6 h-6 text-white" />
                           </div>
                           
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center space-x-3 mb-2">
-                              <h4 className="font-semibold text-gray-900">
+                              <h4 className="font-semibold text-gray-900 truncate">
                                 {transaction.description}
                               </h4>
                               {transaction.installments > 1 && (
@@ -1465,7 +1464,7 @@ export function CreditCards() {
 
             <div className="space-y-4">
               <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-blue-900 mb-2">
+                <h3 className="font-semibold text-blue-900 mb-2 truncate">
                   {advancingTransaction.description}
                 </h3>
                 <div className="grid grid-cols-2 gap-4 text-sm text-blue-800">

@@ -561,7 +561,7 @@ export function Budgets() {
                         {format(parse(budget.start_date, "yyyy-MM-dd", new Date()), "dd/MM", { locale: ptBR })} - {format(parse(budget.end_date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy", { locale: ptBR })}
                       </p>
                       {budget.description && (
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-gray-500 mt-1 truncate">
                           {budget.description}
                         </p>
                       )}
@@ -805,7 +805,7 @@ export function Budgets() {
                   {selectedBudgetForPayment.category?.name || "Categoria não encontrada"}
                 </h3>
                 {selectedBudgetForPayment.description && (
-                  <p className="text-sm text-gray-600 mb-2">
+                  <p className="text-sm text-gray-600 mb-2 truncate">
                     {selectedBudgetForPayment.description}
                   </p>
                 )}

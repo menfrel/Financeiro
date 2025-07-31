@@ -70,11 +70,11 @@ export function TransactionCard({ transaction, isDetailed, onEdit, onDelete }: T
             {/* Content */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center space-x-2">
-                <h3 className="font-semibold text-gray-900 truncate text-sm">
+                <h3 className="font-semibold text-gray-900 truncate text-sm flex-1 min-w-0">
                   {transaction.description}
                 </h3>
                 {transaction.is_recurring && (
-                  <div className="flex items-center space-x-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">
+                  <div className="flex items-center space-x-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full flex-shrink-0">
                     <Repeat className="w-3 h-3" />
                     <span className="text-xs font-medium">Recorrente</span>
                   </div>
@@ -82,18 +82,18 @@ export function TransactionCard({ transaction, isDetailed, onEdit, onDelete }: T
               </div>
               <div className="flex items-center space-x-2 mt-1">
                 {transaction.category && (
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center space-x-1 flex-shrink-0">
                     <div 
                       className="w-2 h-2 rounded-full" 
                       style={{ backgroundColor: transaction.category.color }}
                     />
-                    <span className="text-xs text-gray-500 truncate">
+                    <span className="text-xs text-gray-500 truncate max-w-[100px]">
                       {transaction.category.name}
                     </span>
                   </div>
                 )}
-                <span className="text-xs text-gray-400">•</span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-gray-400 flex-shrink-0">•</span>
+                <span className="text-xs text-gray-500 flex-shrink-0">
                   {formatDate(transaction.date)}
                 </span>
               </div>
@@ -148,30 +148,30 @@ export function TransactionCard({ transaction, isDetailed, onEdit, onDelete }: T
       {/* Descrição, Categoria e Recorrente */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center space-x-2">
-          <h3 className="font-semibold text-gray-900 truncate text-sm">
+          <h3 className="font-semibold text-gray-900 truncate text-sm flex-1 min-w-0">
             {transaction.description}
           </h3>
           {transaction.category && (
-            <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium truncate">
+            <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium truncate flex-shrink-0 max-w-[120px]">
               {transaction.category.name}
             </span>
           )}
           {transaction.is_recurring && (
-            <div className="flex items-center space-x-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">
+            <div className="flex items-center space-x-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full flex-shrink-0">
               <Repeat className="w-3 h-3" />
               <span className="text-xs font-medium">Recorrente</span>
             </div>
           )}
         </div>
         <div className="flex items-center space-x-2 mt-1">
-          <span className="text-xs text-gray-400">•</span>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-400 flex-shrink-0">•</span>
+          <span className="text-xs text-gray-500 flex-shrink-0">
             {formatDate(transaction.date)}
           </span>
           {transaction.is_recurring && transaction.recurring_until && (
             <>
-              <span className="text-xs text-gray-400">até</span>
-              <span className="text-xs text-gray-500">{formatDate(transaction.recurring_until)}</span>
+              <span className="text-xs text-gray-400 flex-shrink-0">até</span>
+              <span className="text-xs text-gray-500 flex-shrink-0">{formatDate(transaction.recurring_until)}</span>
             </>
           )}
         </div>

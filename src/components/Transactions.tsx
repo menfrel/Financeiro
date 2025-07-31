@@ -493,24 +493,24 @@ export function Transactions() {
         </button>
       </div>
 
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Lançamentos</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Lançamentos</h1>
           <p className="text-gray-600 mt-2">
             Registre suas receitas e despesas para {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
           </p>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
           <button
             onClick={openCreditCardModal}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
           >
             <CreditCard className="w-4 h-4" />
             <span>Compra no Cartão</span>
           </button>
           <button
             onClick={openModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
           >
             <Plus className="w-4 h-4" />
             <span>Novo Lançamento</span>
@@ -519,87 +519,87 @@ export function Transactions() {
       </div>
 
       {/* Cards de Estatísticas do Mês */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6">
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Receitas do Mês</p>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-xs sm:text-sm font-medium text-gray-600">Receitas do Mês</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-600">
                 {formatCurrency(monthlyStats.totalIncome)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-green-600" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Despesas do Mês</p>
-              <p className="text-2xl font-bold text-red-600">
+              <p className="text-xs sm:text-sm font-medium text-gray-600">Despesas do Mês</p>
+              <p className="text-lg sm:text-2xl font-bold text-red-600">
                 {formatCurrency(monthlyStats.totalExpenses)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-              <TrendingDown className="w-6 h-6 text-red-600" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 rounded-lg flex items-center justify-center">
+              <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Saldo do Mês</p>
-              <p className={`text-2xl font-bold ${
+              <p className="text-xs sm:text-sm font-medium text-gray-600">Saldo do Mês</p>
+              <p className={`text-lg sm:text-2xl font-bold ${
                 monthlyBalance >= 0 ? "text-green-600" : "text-red-600"
               }`}>
                 {formatCurrency(monthlyBalance)}
               </p>
             </div>
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center ${
               monthlyBalance >= 0 ? "bg-green-100" : "bg-red-100"
             }`}>
-              <DollarSign className={`w-6 h-6 ${
+              <DollarSign className={`w-5 h-5 sm:w-6 sm:h-6 ${
                 monthlyBalance >= 0 ? "text-green-600" : "text-red-600"
               }`} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total de Lançamentos</p>
-              <p className="text-2xl font-bold text-blue-600">
+              <p className="text-xs sm:text-sm font-medium text-gray-600">Total de Lançamentos</p>
+              <p className="text-lg sm:text-2xl font-bold text-blue-600">
                 {monthlyStats.transactionsCount}
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 {filteredTransactions.filter(t => t.type === "income").length} receitas, {filteredTransactions.filter(t => t.type === "expense").length} despesas
               </p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Calendar className="w-6 h-6 text-blue-600" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
         <div className="flex items-center space-x-2 mb-4">
           <Filter className="w-5 h-5 text-gray-600" />
           <span className="font-medium text-gray-900">Filtros</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <select
             value={filter.type}
             onChange={(e) =>
               setFilter((prev) => ({ ...prev, type: e.target.value }))
             }
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="">Todos os tipos</option>
             <option value="income">Receitas</option>
@@ -611,7 +611,7 @@ export function Transactions() {
             onChange={(e) =>
               setFilter((prev) => ({ ...prev, account: e.target.value }))
             }
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="">Todas as contas</option>
             {accounts.map((account) => (
@@ -626,7 +626,7 @@ export function Transactions() {
             onChange={(e) =>
               setFilter((prev) => ({ ...prev, category: e.target.value }))
             }
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:col-span-2 lg:col-span-1"
           >
             <option value="">Todas as categorias</option>
             {categories.map((category) => (
@@ -639,7 +639,7 @@ export function Transactions() {
       </div>
 
       {/* Transactions List */}
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         {filteredTransactions.length === 0 ? (
           <div className="text-center py-12">
             <ArrowUpRight className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -663,77 +663,41 @@ export function Transactions() {
           filteredTransactions.map((transaction) => (
             <div
               key={transaction.id}
-              className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+              className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
                   <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
                       transaction.type === "income"
                         ? "bg-green-100"
                         : "bg-red-100"
                     }`}
                   >
                     {transaction.type === "income" ? (
-                      <ArrowUpRight className="w-6 h-6 text-green-600" />
+                      <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                     ) : (
-                      <ArrowDownRight className="w-6 h-6 text-red-600" />
+                      <ArrowDownRight className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
                     )}
                   </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <h3 className="font-semibold text-gray-900">
-                        {transaction.description}
-                      </h3>
-                      {transaction.is_recurring && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                          Recorrente
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
-                      <span>
-                        {transaction.category?.name || "Sem categoria"}
-                      </span>
-                      <span>•</span>
-                      <span>{transaction.account?.name || "Sem conta"}</span>
-                      <span>•</span>
-                      <span>
-                        {format(parse(transaction.date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy")}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-4">
-                  <div className="text-right">
-                    <p
-                      className={`text-xl font-bold ${
-                        transaction.type === "income"
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {transaction.type === "income" ? "+" : "-"}
-                      {formatCurrency(transaction.amount)}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
+                      {transaction.description}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-gray-500 truncate">
+                      {transaction.category?.name} • {transaction.account?.name}
                     </p>
                   </div>
-
-                  <div className="flex space-x-1">
-                    <button
-                      onClick={() => handleEdit(transaction)}
-                      className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(transaction.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                </div>
+                <div className="text-right ml-3 flex-shrink-0 min-w-[120px]">
+                  <p className={`font-bold text-sm sm:text-lg ${
+                    transaction.type === "income" ? "text-green-600" : "text-red-600"
+                  }`}>
+                    {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {format(parse(transaction.date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy")}
+                  </p>
                 </div>
               </div>
             </div>

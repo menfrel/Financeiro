@@ -952,7 +952,7 @@ export function PatientPayments() {
                   {viewingPayment.description && (
                     <div>
                       <span className="text-gray-600">Descrição:</span>
-                      <p className="text-gray-900">{viewingPayment.description}</p>
+                      <p className="text-gray-900 truncate">{viewingPayment.description}</p>
                     </div>
                   )}
                 </div>

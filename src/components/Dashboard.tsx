@@ -493,11 +493,11 @@ export function Dashboard() {
                         <ArrowDownRight className="w-4 h-4 text-red-600" />
                       )}
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">
                         {transaction.description}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-gray-500 truncate">
                         {transaction.category}
                       </p>
                     </div>

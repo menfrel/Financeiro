@@ -312,8 +312,8 @@ export function Transfers() {
                   <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                     <ArrowRightLeft className="w-6 h-6 text-green-600" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 mb-1 truncate">
                       {transfer.description}
                     </h3>
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
