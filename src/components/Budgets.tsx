@@ -739,28 +739,27 @@ export function Budgets() {
                     </span>
                   </div>
 
-                  {/* Botão Marcar como Pago */}
-                  {budget.amount - budget.spent > 0 && (
-                    <button
-                      onClick={() => handleMarkAsPaid(budget)}
-                      className={`w-auto px-3 py-1.5 text-white rounded-lg text-xs transition-colors flex items-center space-x-1 ${
-                        budget.payment_method === "credit_card" 
-                          ? "bg-purple-600 hover:bg-purple-700" 
-                          : "bg-green-600 hover:bg-green-700"
-                      }`}
+                  <div className="flex items-center space-x-1">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(budget.status)}`}
                     >
-                      {budget.payment_method === "credit_card" ? (
-                        <>
-                          <CreditCard className="w-3 h-3" />
-                          <span>Pagar no Cartão</span>
-                        </>
-                      ) : (
-                        <>
-                          <DollarSign className="w-3 h-3" />
-                          <span>Pagar</span>
-                        </>
-                      )}
-                    </button>
+                      <StatusIcon className="w-3 h-3 inline mr-1" />
+                      {budget.percentage.toFixed(0)}%
+                    </span>
+                    <div className="flex space-x-1">
+                      <button
+                        onClick={() => handleEdit(budget)}
+                        className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(budget.id)}
+                        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
