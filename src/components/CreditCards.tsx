@@ -38,6 +38,12 @@ interface CreditCardTransaction {
   installments: number;
   current_installment: number;
   created_at: string;
+  category_id?: string;
+  categories?: {
+    id: string;
+    name: string;
+    color: string;
+  } | null;
 }
 
 interface CreditCardForm {
@@ -53,6 +59,7 @@ interface TransactionForm {
   description: string;
   date: string;
   installments: number;
+  category_id: string;
 }
 
 interface PaymentForm {
@@ -67,6 +74,7 @@ export function CreditCards() {
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [transactions, setTransactions] = useState<CreditCardTransaction[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -142,7 +150,8 @@ export function CreditCards() {
         .from("credit_card_transactions")
         .select(`
           *,
-          credit_cards (name)
+          credit_cards (name),
+          categories (id, name, color)
         `)
         .eq("user_id", user.id)
         .order("date", { ascending: false });
@@ -158,9 +167,18 @@ export function CreditCards() {
         .eq("user_id", user.id)
         .order("name", { ascending: true });
 
+      // Carregar categorias
+      const { data: categoriesData } = await supabase
+        .from("categories")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("type", "expense")
+        .order("name", { ascending: true });
+
       setCreditCards(cardsData || []);
       setTransactions(transactionsData || []);
       setAccounts(accountsData || []);
+      setCategories(categoriesData || []);
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -235,6 +253,7 @@ export function CreditCards() {
           .insert({
             user_id: user.id,
             credit_card_id: data.credit_card_id,
+            category_id: data.category_id,
             amount: installmentAmount,
             description: data.installments > 1 
               ? `${data.description} (${i + 1}/${data.installments})`
@@ -375,6 +394,7 @@ export function CreditCards() {
     setEditTransactionValue("description", transaction.description);
     setEditTransactionValue("date", transaction.date);
     setEditTransactionValue("installments", transaction.installments);
+    setEditTransactionValue("category_id", transaction.category_id || "");
     setIsEditTransactionModalOpen(true);
   };
 
@@ -391,6 +411,7 @@ export function CreditCards() {
           description: data.description,
           date: data.date,
           installments: data.installments,
+          category_id: data.category_id,
         })
         .eq("id", editingTransaction.id)
         .eq("user_id", user!.id);
@@ -927,6 +948,15 @@ export function CreditCards() {
                                   {formatCurrency(transaction.amount)}
                                 </span>
                               </div>
+                              {transaction.categories && (
+                                <div className="flex items-center space-x-2">
+                                  <div 
+                                    className="w-3 h-3 rounded-full"
+                                    style={{ backgroundColor: transaction.categories.color }}
+                                  />
+                                  <span>{transaction.categories.name}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                           
@@ -1159,6 +1189,30 @@ export function CreditCards() {
                 )}
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Categoria
+                </label>
+                <select
+                  {...registerTransaction("category_id", {
+                    required: "Categoria é obrigatória",
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione a categoria</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                {transactionErrors.category_id && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {transactionErrors.category_id.message}
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1384,6 +1438,30 @@ export function CreditCards() {
                 {editTransactionErrors.description && (
                   <p className="text-red-600 text-sm mt-1">
                     {editTransactionErrors.description.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Categoria
+                </label>
+                <select
+                  {...registerEditTransaction("category_id", {
+                    required: "Categoria é obrigatória",
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione a categoria</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                {editTransactionErrors.category_id && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {editTransactionErrors.category_id.message}
                   </p>
                 )}
               </div>
