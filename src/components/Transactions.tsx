@@ -10,9 +10,15 @@ import {
   Filter,
   Calendar,
   CreditCard,
+  ChevronLeft,
+  ChevronRight,
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { format, parse } from "date-fns";
+import { format, parse, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface Transaction {
   id: string;
@@ -58,12 +64,11 @@ export function Transactions() {
     useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [filter, setFilter] = useState({
     type: "",
     account: "",
     category: "",
-    startDate: "",
-    endDate: "",
   });
 
   const {
@@ -89,7 +94,7 @@ export function Transactions() {
     if (user) {
       loadData();
     }
-  }, [user]);
+  }, [user, selectedMonth]);
 
   const recalculateAccountBalances = async (accountIds: string[]) => {
     try {
@@ -156,7 +161,8 @@ export function Transactions() {
         `,
         )
         .eq("user_id", user.id)
-        .order("date", { ascending: false });
+        .order("date", { ascending: false })
+        .order("created_at", { ascending: false });
 
       if (transactionsError) {
         console.error("Error loading transactions:", transactionsError);
@@ -377,13 +383,13 @@ export function Transactions() {
   const openModal = () => {
     setEditingTransaction(null);
     reset();
-    setValue("date", format(new Date(), "yyyy-MM-dd"));
+    setValue("date", format(selectedMonth, "yyyy-MM-dd"));
     setIsModalOpen(true);
   };
 
   const openCreditCardModal = () => {
     resetCreditCard();
-    setValue("date", format(new Date(), "yyyy-MM-dd"));
+    setValue("date", format(selectedMonth, "yyyy-MM-dd"));
     setValue("installments", 1);
     setIsCreditCardModalOpen(true);
   };
@@ -398,19 +404,45 @@ export function Transactions() {
   };
 
   const filteredTransactions = transactions.filter((transaction) => {
+    // Filtrar por mês selecionado
+    const transactionDate = new Date(transaction.date);
+    const monthStart = startOfMonth(selectedMonth);
+    const monthEnd = endOfMonth(selectedMonth);
+    
+    if (transactionDate < monthStart || transactionDate > monthEnd) {
+      return false;
+    }
+    
+    // Aplicar outros filtros
     if (filter.type && transaction.type !== filter.type) return false;
     if (filter.account && transaction.account?.id !== filter.account)
       return false;
     if (filter.category && transaction.category?.id !== filter.category)
       return false;
-    if (filter.startDate && transaction.date < filter.startDate) return false;
-    if (filter.endDate && transaction.date > filter.endDate) return false;
     return true;
+  }).sort((a, b) => {
+    // Ordenar por data (mais novo primeiro) e depois por created_at
+    const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
+    if (dateComparison !== 0) return dateComparison;
+    return new Date(b.created_at || b.date).getTime() - new Date(a.created_at || a.date).getTime();
   });
 
   const availableCategories = categories.filter(
     (cat) => !watchType || cat.type === watchType,
   );
+
+  // Calcular estatísticas do mês
+  const monthlyStats = {
+    totalIncome: filteredTransactions
+      .filter(t => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0),
+    totalExpenses: filteredTransactions
+      .filter(t => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0),
+    transactionsCount: filteredTransactions.length,
+  };
+  
+  const monthlyBalance = monthlyStats.totalIncome - monthlyStats.totalExpenses;
 
   if (loading) {
     return (
@@ -435,11 +467,37 @@ export function Transactions() {
 
   return (
     <div className="p-6">
+      {/* Navegação por Mês */}
+      <div className="flex items-center justify-between bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
+        <button
+          onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900">
+            {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
+          </h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {monthlyStats.transactionsCount} lançamento(s) no mês
+          </p>
+        </div>
+
+        <button
+          onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
+
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Lançamentos</h1>
           <p className="text-gray-600 mt-2">
-            Registre suas receitas e despesas
+            Registre suas receitas e despesas para {format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}
           </p>
         </div>
         <div className="flex space-x-3">
@@ -460,6 +518,74 @@ export function Transactions() {
         </div>
       </div>
 
+      {/* Cards de Estatísticas do Mês */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Receitas do Mês</p>
+              <p className="text-2xl font-bold text-green-600">
+                {formatCurrency(monthlyStats.totalIncome)}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Despesas do Mês</p>
+              <p className="text-2xl font-bold text-red-600">
+                {formatCurrency(monthlyStats.totalExpenses)}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+              <TrendingDown className="w-6 h-6 text-red-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Saldo do Mês</p>
+              <p className={`text-2xl font-bold ${
+                monthlyBalance >= 0 ? "text-green-600" : "text-red-600"
+              }`}>
+                {formatCurrency(monthlyBalance)}
+              </p>
+            </div>
+            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+              monthlyBalance >= 0 ? "bg-green-100" : "bg-red-100"
+            }`}>
+              <DollarSign className={`w-6 h-6 ${
+                monthlyBalance >= 0 ? "text-green-600" : "text-red-600"
+              }`} />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total de Lançamentos</p>
+              <p className="text-2xl font-bold text-blue-600">
+                {monthlyStats.transactionsCount}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {filteredTransactions.filter(t => t.type === "income").length} receitas, {filteredTransactions.filter(t => t.type === "expense").length} despesas
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Calendar className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
         <div className="flex items-center space-x-2 mb-4">
@@ -467,7 +593,7 @@ export function Transactions() {
           <span className="font-medium text-gray-900">Filtros</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <select
             value={filter.type}
             onChange={(e) =>
@@ -509,26 +635,6 @@ export function Transactions() {
               </option>
             ))}
           </select>
-
-          <input
-            type="date"
-            value={filter.startDate}
-            onChange={(e) =>
-              setFilter((prev) => ({ ...prev, startDate: e.target.value }))
-            }
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Data inicial"
-          />
-
-          <input
-            type="date"
-            value={filter.endDate}
-            onChange={(e) =>
-              setFilter((prev) => ({ ...prev, endDate: e.target.value }))
-            }
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Data final"
-          />
         </div>
       </div>
 
@@ -541,7 +647,10 @@ export function Transactions() {
               Nenhum lançamento encontrado
             </h3>
             <p className="text-gray-600 mb-6">
-              Registre seu primeiro lançamento para começar
+              {filter.type || filter.account || filter.category
+                ? "Nenhum lançamento encontrado com os filtros aplicados"
+                : `Nenhum lançamento encontrado para ${format(selectedMonth, 'MMMM yyyy', { locale: ptBR })}`
+              }
             </p>
             <button
               onClick={openModal}
