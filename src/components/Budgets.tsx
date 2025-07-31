@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   DollarSign,
+  CreditCard,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format, startOfMonth, endOfMonth, isWithinInterval, parse, addMonths, subMonths } from "date-fns";
@@ -638,6 +639,7 @@ export function Budgets() {
                         backgroundColor: budget.category?.color || "#6B7280",
                       }}
                     />
+                    <div>
                       <h3 className="font-semibold text-gray-900">
                         {budget.category?.name || "Categoria não encontrada"}
                       </h3>
@@ -760,7 +762,7 @@ export function Budgets() {
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             );
