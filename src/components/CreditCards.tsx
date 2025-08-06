@@ -243,7 +243,7 @@ export function CreditCards() {
 
       // Criar transações para cada parcela
       const installmentAmount = data.amount / data.installments;
-      const baseDate = new Date(data.date);
+      const baseDate = parse(data.date, "yyyy-MM-dd", new Date());
 
       for (let i = 0; i < data.installments; i++) {
         const installmentDate = addMonths(baseDate, i);
@@ -312,7 +312,7 @@ export function CreditCards() {
         return;
       }
 
-      // Criar transação de pagamento
+      // Criar transação de pagamento (conta)
       const { error: transactionError } = await supabase
         .from("transactions")
         .insert({
@@ -326,6 +326,21 @@ export function CreditCards() {
         });
 
       if (transactionError) throw transactionError;
+
+      // Criar transação de pagamento (cartão)
+      const { error: cardTransactionError } = await supabase
+        .from("credit_card_transactions")
+        .insert({
+          user_id: user.id,
+          credit_card_id: data.credit_card_id,
+          amount: -data.amount, // valor negativo para pagamento
+          description: "Pagamento da Fatura",
+          date: data.date,
+          installments: 1,
+          current_installment: 1,
+          category_id: null,
+        });
+      if (cardTransactionError) throw cardTransactionError;
 
       // Atualizar saldo da conta
       const { error: accountError } = await supabase
@@ -440,10 +455,18 @@ export function CreditCards() {
       // Atualizar saldo do cartão
       const card = creditCards.find(c => c.id === transaction.credit_card_id);
       if (card) {
+        let novoSaldo = card.current_balance;
+        if (transaction.amount < 0) {
+          // Pagamento: ao excluir, soma o valor ao saldo
+          novoSaldo = card.current_balance + Math.abs(transaction.amount);
+        } else {
+          // Compra: ao excluir, subtrai o valor do saldo
+          novoSaldo = Math.max(0, card.current_balance - transaction.amount);
+        }
         const { error: cardError } = await supabase
           .from("credit_cards")
           .update({
-            current_balance: Math.max(0, card.current_balance - transaction.amount),
+            current_balance: novoSaldo,
           })
           .eq("id", transaction.credit_card_id);
 
@@ -479,7 +502,7 @@ export function CreditCards() {
 
       // Criar nova transação para a próxima parcela
       const nextInstallment = advancingTransaction.current_installment + 1;
-      const nextDate = addMonths(new Date(advancingTransaction.date), 1);
+      const nextDate = addMonths(parse(advancingTransaction.date, "yyyy-MM-dd", new Date()), 1);
 
       const { error } = await supabase
         .from("credit_card_transactions")
@@ -587,12 +610,14 @@ export function CreditCards() {
     const monthEnd = endOfMonth(selectedTransactionMonth);
     
     const filteredTransactions = transactions.filter(transaction => {
-      const transactionDate = new Date(transaction.date);
+      // Correção: Usar parse para interpretar corretamente a data
+      const transactionDate = parse(transaction.date, "yyyy-MM-dd", new Date());
       return transactionDate >= monthStart && transactionDate <= monthEnd;
     });
 
     const grouped = filteredTransactions.reduce((acc: any, transaction: any) => {
-      const date = new Date(transaction.date);
+      // Correção: Usar parse para interpretar corretamente a data
+      const date = parse(transaction.date, "yyyy-MM-dd", new Date());
       const monthKey = format(date, "yyyy-MM");
       
       if (!acc[monthKey]) {

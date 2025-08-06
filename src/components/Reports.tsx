@@ -61,6 +61,15 @@ interface ReportData {
     percentage: number;
     color: string;
   }>;
+  allExpenses: Array<{
+    id: string;
+    description: string;
+    amount: number;
+    date: string;
+    category: string;
+    categoryColor: string;
+    account: string;
+  }>;
 }
 
 export function Reports() {
@@ -73,6 +82,7 @@ export function Reports() {
     monthlyTrend: [],
     expensesByCategory: [],
     topExpenseCategories: [],
+    allExpenses: [],
   });
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
@@ -246,6 +256,7 @@ export function Reports() {
           monthlyTrend: [],
           expensesByCategory: [],
           topExpenseCategories: [],
+          allExpenses: [],
         });
         setLoading(false);
         return;
@@ -403,6 +414,19 @@ export function Reports() {
           color: cat.color,
         }));
 
+      // Lista de todas as despesas do mês
+      const allExpenses = expenseTransactions
+        .map((transaction) => ({
+          id: transaction.id,
+          description: transaction.description,
+          amount: transaction.amount,
+          date: transaction.date,
+          category: transaction.categories?.name || "Sem categoria",
+          categoryColor: transaction.categories?.color || "#6B7280",
+          account: transaction.accounts?.name || "Conta não especificada",
+        }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
       console.log("=== DADOS FINAIS ===");
       console.log("Dados do relatório:", {
         totalIncome,
@@ -410,6 +434,7 @@ export function Reports() {
         balance,
         categoriesCount: transactionsByCategory.length,
         monthlyTrendCount: monthlyTrend.length,
+        expensesCount: allExpenses.length,
       });
 
       setReportData({
@@ -420,6 +445,7 @@ export function Reports() {
         monthlyTrend,
         expensesByCategory,
         topExpenseCategories,
+        allExpenses,
       });
     } catch (error) {
       console.error("Erro ao carregar dados do relatório:", error);
@@ -753,7 +779,7 @@ export function Reports() {
       </div>
 
       {/* Top Categorias de Despesa */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
           Principais Categorias de Despesa
         </h3>
@@ -787,6 +813,51 @@ export function Reports() {
           ))}
 
           {reportData.topExpenseCategories.length === 0 && (
+            <div className="text-center text-gray-500 py-8">
+              Nenhuma despesa encontrada no período selecionado
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Lista de Todas as Despesas do Mês */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Todas as Despesas do Período
+        </h3>
+        <div className="space-y-3">
+          {reportData.allExpenses.map((expense) => (
+            <div
+              key={expense.id}
+              className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <div className="flex items-center space-x-4">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: expense.categoryColor }}
+                />
+                <div>
+                  <p className="font-medium text-gray-900">
+                    {expense.description}
+                  </p>
+                  <div className="flex items-center space-x-4 text-sm text-gray-600">
+                    <span>{expense.category}</span>
+                    <span>•</span>
+                    <span>{expense.account}</span>
+                    <span>•</span>
+                    <span>{format(parse(expense.date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy")}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-red-600">
+                  {formatCurrency(expense.amount)}
+                </p>
+              </div>
+            </div>
+          ))}
+
+          {reportData.allExpenses.length === 0 && (
             <div className="text-center text-gray-500 py-8">
               Nenhuma despesa encontrada no período selecionado
             </div>

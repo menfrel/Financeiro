@@ -404,8 +404,8 @@ export function Transactions() {
   };
 
   const filteredTransactions = transactions.filter((transaction) => {
-    // Filtrar por mês selecionado
-    const transactionDate = new Date(transaction.date);
+    // Filtrar por mês selecionado - usar parse para interpretar corretamente a data
+    const transactionDate = parse(transaction.date, "yyyy-MM-dd", new Date());
     const monthStart = startOfMonth(selectedMonth);
     const monthEnd = endOfMonth(selectedMonth);
     
@@ -422,7 +422,7 @@ export function Transactions() {
     return true;
   }).sort((a, b) => {
     // Ordenar por data (mais novo primeiro) e depois por created_at
-    const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
+    const dateComparison = parse(b.date, "yyyy-MM-dd", new Date()).getTime() - parse(a.date, "yyyy-MM-dd", new Date()).getTime();
     if (dateComparison !== 0) return dateComparison;
     return new Date(b.created_at || b.date).getTime() - new Date(a.created_at || a.date).getTime();
   });
