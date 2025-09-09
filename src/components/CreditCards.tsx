@@ -903,34 +903,34 @@ export function CreditCards() {
                   {filteredTransactions.map((transaction) => (
                     <div
                       key={transaction.id}
-                      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                      className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                        <div className="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
                             <CreditCard className="w-6 h-6 text-purple-600" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-gray-900 mb-1 truncate">
+                            <h3 className="font-semibold text-gray-900 mb-1 truncate text-sm sm:text-base">
                               {transaction.description}
                             </h3>
-                            <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600">
                               {transaction.category && (
-                                <>
+                                <div className="flex items-center space-x-1">
                                   <div
-                                    className="w-3 h-3 rounded-full"
+                                    className="w-2 h-2 sm:w-3 sm:h-3 rounded-full flex-shrink-0"
                                     style={{ backgroundColor: transaction.category.color }}
                                   />
-                                  <span>{transaction.category.name}</span>
-                                  <span>•</span>
-                                </>
+                                  <span className="truncate max-w-[80px] sm:max-w-none">{transaction.category.name}</span>
+                                </div>
                               )}
+                              {transaction.category && <span className="text-gray-400">•</span>}
                               <span>
                                 {format(new Date(transaction.date), "dd/MM/yyyy")}
                               </span>
                               {transaction.installments > 1 && (
                                 <>
-                                  <span>•</span>
+                                  <span className="text-gray-400">•</span>
                                   <span>
                                     {transaction.current_installment}/{transaction.installments}x
                                   </span>
@@ -939,8 +939,540 @@ export function CreditCards() {
                             </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-purple-600">
+                        <div className="flex items-center justify-between sm:justify-end space-x-3">
+                          <div className="text-left sm:text-right">
+                            <p className="text-lg sm:text-2xl font-bold text-purple-600">
+                              {formatCurrency(transaction.amount)}
+                            </p>
+                          </div>
+                          
+                          {/* Botões de Ação */}
+                          <div className="flex items-center space-x-1 flex-shrink-0">
+                            {transaction.installments > 1 && transaction.current_installment < transaction.installments && (
+                              <button
+                                onClick={() => handleAdvanceInstallment(transaction)}
+                                className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                title="Adiantar Parcela"
+                              >
+                                <TrendingUp className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleEditTransaction(transaction)}
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Editar"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTransaction(transaction.id)}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Informações Adicionais em Mobile */}
+                      <div className="sm:hidden mt-3 pt-3 border-t border-gray-100">
+                        <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                          <div>
+                            <span className="font-medium">Método:</span> Cartão
+                          </div>
+                          <div>
+                            <span className="font-medium">Categoria:</span> {transaction.category?.name || 'N/A'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Modal Editar Transação */}
+      {isEditTransactionModalOpen && editingTransaction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              Editar Transação
+            </h2>
+
+            <form onSubmit={handleEditTransactionSubmit(onEditTransactionSubmit)} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição
+                </label>
+                <input
+                  {...registerEditTransaction("description", {
+                    required: "Descrição é obrigatória",
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: Compra no supermercado"
+                />
+                {editTransactionErrors.description && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {editTransactionErrors.description.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Valor
+                </label>
+                <input
+                  {...registerEditTransaction("amount", {
+                    required: "Valor é obrigatório",
+                    valueAsNumber: true,
+                    min: {
+                      value: 0.01,
+                      message: "Valor deve ser maior que zero",
+                    },
+                  })}
+                  type="number"
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+                {editTransactionErrors.amount && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {editTransactionErrors.amount.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Data
+                </label>
+                <input
+                  {...registerEditTransaction("date", {
+                    required: "Data é obrigatória",
+                  })}
+                  type="date"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {editTransactionErrors.date && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {editTransactionErrors.date.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Categoria
+                </label>
+                <select
+                  {...registerEditTransaction("category_id")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione a categoria</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsEditTransactionModalOpen(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {submitting ? "Salvando..." : "Salvar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Adiantar Parcela */}
+      {isAdvanceModalOpen && advancingTransaction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              Adiantar Parcelas
+            </h2>
+
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-medium text-gray-900 mb-2">
+                  {advancingTransaction.description}
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Parcela Atual:</span>
+                    <p className="font-medium">{advancingTransaction.current_installment}/{advancingTransaction.installments}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Valor por Parcela:</span>
+                    <p className="font-medium">{formatCurrency(advancingTransaction.amount)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Quantas parcelas adiantar?
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={advancingTransaction.installments - advancingTransaction.current_installment}
+                  value={advanceCount}
+                  onChange={(e) => setAdvanceCount(parseInt(e.target.value) || 1)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Máximo: {advancingTransaction.installments - advancingTransaction.current_installment} parcela(s) restante(s)
+                </p>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <p className="text-blue-800 text-sm">
+                  <strong>Total a ser cobrado:</strong> {formatCurrency(advancingTransaction.amount * advanceCount)}
+                </p>
+                <p className="text-blue-700 text-xs mt-1">
+                  Isso criará {advanceCount} nova(s) transação(ões) com data de hoje.
+                </p>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdvanceModalOpen(false);
+                    setAdvancingTransaction(null);
+                    setAdvanceCount(1);
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmAdvance}
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {submitting ? "Processando..." : "Confirmar Antecipação"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Transação */}
+      {isTransactionModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              Nova Compra no Cartão
+            </h2>
+
+            <form
+              onSubmit={handleTransactionSubmit(onTransactionSubmit)}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Cartão
+                </label>
+                <select
+                  {...registerTransaction("credit_card_id", {
+                    required: "Cartão é obrigatório",
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione o cartão</option>
+                  {creditCards.map((card) => (
+                    <option key={card.id} value={card.id}>
+                      {card.name}
+                    </option>
+                  ))}
+                </select>
+                {transactionErrors.credit_card_id && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {transactionErrors.credit_card_id.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Categoria (opcional)
+                </label>
+                <select
+                  {...registerTransaction("category_id")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione a categoria</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Valor
+                </label>
+                <input
+                  {...registerTransaction("amount", {
+                    required: "Valor é obrigatório",
+                    valueAsNumber: true,
+                    min: {
+                      value: 0.01,
+                      message: "Valor deve ser maior que zero",
+                    },
+                  })}
+                  type="number"
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+                {transactionErrors.amount && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {transactionErrors.amount.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição
+                </label>
+                <input
+                  {...registerTransaction("description", {
+                    required: "Descrição é obrigatória",
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: Compra no supermercado"
+                />
+                {transactionErrors.description && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {transactionErrors.description.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data da Compra
+                  </label>
+                  <input
+                    {...registerTransaction("date", {
+                      required: "Data é obrigatória",
+                    })}
+                    type="date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {transactionErrors.date && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {transactionErrors.date.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Parcelas
+                  </label>
+                  <input
+                    {...registerTransaction("installments", {
+                      required: "Número de parcelas é obrigatório",
+                      valueAsNumber: true,
+                      min: { value: 1, message: "Mínimo 1 parcela" },
+                      max: { value: 24, message: "Máximo 24 parcelas" },
+                    })}
+                    type="number"
+                    min="1"
+                    max="24"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {transactionErrors.installments && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {transactionErrors.installments.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsTransactionModalOpen(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {submitting ? "Criando..." : "Registrar Compra"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Cartão */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              {editingCard ? "Editar Cartão" : "Novo Cartão"}
+            </h2>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nome do Cartão
+                </label>
+                <input
+                  {...register("name", { required: "Nome é obrigatório" })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: Nubank, Itaú, etc."
+                />
+                {errors.name && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {errors.name.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Limite
+                </label>
+                <input
+                  {...register("limit_amount", {
+                    required: "Limite é obrigatório",
+                    valueAsNumber: true,
+                    min: {
+                      value: 0.01,
+                      message: "Limite deve ser maior que zero",
+                    },
+                  })}
+                  type="number"
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+                {errors.limit_amount && (
+                  <p className="text-red-600 text-sm mt-1">
+                    {errors.limit_amount.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Dia de Fechamento
+                  </label>
+                  <input
+                    {...register("closing_day", {
+                      required: "Dia de fechamento é obrigatório",
+                      valueAsNumber: true,
+                      min: { value: 1, message: "Dia deve ser entre 1 e 31" },
+                      max: { value: 31, message: "Dia deve ser entre 1 e 31" },
+                    })}
+                    type="number"
+                    min="1"
+                    max="31"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: 15"
+                  />
+                  {errors.closing_day && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {errors.closing_day.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Dia de Vencimento
+                  </label>
+                  <input
+                    {...register("due_day", {
+                      required: "Dia de vencimento é obrigatório",
+                      valueAsNumber: true,
+                      min: { value: 1, message: "Dia deve ser entre 1 e 31" },
+                      max: { value: 31, message: "Dia deve ser entre 1 e 31" },
+                    })}
+                    type="number"
+                    min="1"
+                    max="31"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: 25"
+                  />
+                  {errors.due_day && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {errors.due_day.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <p className="text-blue-800 text-sm">
+                  <strong>Exemplo:</strong> Se o fechamento é dia 15 e vencimento dia 25, 
+                  as compras de 16/07 a 15/08 aparecerão na fatura com vencimento em 25/08.
+                </p>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {submitting
+                    ? "Salvando..."
+                    : editingCard
+                      ? "Atualizar"
+                      : "Criar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
                             {formatCurrency(transaction.amount)}
                           </p>
                           <button
