@@ -8,7 +8,7 @@ import { Dashboard } from "./components/Dashboard";
 import { Accounts } from "./components/Accounts";
 import { Transactions } from "./components/Transactions";
 import { Transfers } from "./components/Transfers";
-import { CreditCards } from "./components/CreditCards";
+import CreditCards from "./components/CreditCards";
 import { Categories } from "./components/Categories";
 import { Budgets } from "./components/Budgets";
 import { Reports } from "./components/Reports";
