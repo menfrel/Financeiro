@@ -396,11 +396,11 @@ export default function CreditCards() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Cartões de Crédito</h1>
-          <p className="text-gray-600">Gerencie seus cartões e faturas</p>
+          <h1 className="text-3xl font-bold text-gray-900">Cartões de Crédito</h1>
+          <p className="text-gray-600 mt-2">Gerencie seus cartões e faturas</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <button
@@ -421,7 +421,7 @@ export default function CreditCards() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-200 mb-6">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('cards')}
@@ -447,68 +447,88 @@ export default function CreditCards() {
       </div>
 
       {activeTab === 'cards' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {creditCards.map((card) => (
-            <div key={card.id} className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <CreditCard className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{card.name}</h3>
-                    <p className="text-sm text-gray-500">
-                      Fecha dia {card.closing_day} • Vence dia {card.due_day}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Limite</span>
-                  <span className="font-medium">
-                    R$ {card.limit_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Disponível</span>
-                  <span className="font-medium text-green-600">
-                    R$ {(card.limit_amount - card.current_balance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Utilização</span>
-                  <span className={`font-medium ${
-                    (card.current_balance / card.limit_amount) * 100 >= 80 ? 'text-red-600' :
-                    (card.current_balance / card.limit_amount) * 100 >= 60 ? 'text-yellow-600' : 'text-green-600'
-                  }`}>
-                    {((card.current_balance / card.limit_amount) * 100).toFixed(1)}%
-                  </span>
-                </div>
-
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className={`h-2 rounded-full ${
-                      (card.current_balance / card.limit_amount) * 100 >= 80 ? 'bg-red-500' :
-                      (card.current_balance / card.limit_amount) * 100 >= 60 ? 'bg-yellow-500' : 'bg-green-500'
-                    }`}
-                    style={{ width: `${Math.min((card.current_balance / card.limit_amount) * 100, 100)}%` }}
-                  ></div>
-                </div>
-              </div>
+        <>
+          {creditCards.length === 0 ? (
+            <div className="text-center py-12">
+              <CreditCard className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Nenhum cartão encontrado
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Cadastre seu primeiro cartão de crédito para começar
+              </p>
+              <button
+                onClick={() => setShowCardForm(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
+              >
+                Cadastrar Cartão
+              </button>
             </div>
-          ))}
-        </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {creditCards.map((card) => (
+                <div key={card.id} className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                        <CreditCard className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{card.name}</h3>
+                        <p className="text-sm text-gray-500">
+                          Fecha dia {card.closing_day} • Vence dia {card.due_day}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Limite</span>
+                      <span className="font-medium">
+                        {formatCurrency(card.limit_amount)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Disponível</span>
+                      <span className="font-medium text-green-600">
+                        {formatCurrency(card.limit_amount - card.current_balance)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Utilização</span>
+                      <span className={`font-medium ${
+                        (card.current_balance / card.limit_amount) * 100 >= 80 ? 'text-red-600' :
+                        (card.current_balance / card.limit_amount) * 100 >= 60 ? 'text-yellow-600' : 'text-green-600'
+                      }`}>
+                        {((card.current_balance / card.limit_amount) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full ${
+                          (card.current_balance / card.limit_amount) * 100 >= 80 ? 'bg-red-500' :
+                          (card.current_balance / card.limit_amount) * 100 >= 60 ? 'bg-yellow-500' : 'bg-green-500'
+                        }`}
+                        style={{ width: `${Math.min((card.current_balance / card.limit_amount) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {activeTab === 'transactions' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Card Selector */}
           {creditCards.length > 1 && (
-            <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Selecionar Cartão
               </label>
@@ -529,7 +549,7 @@ export default function CreditCards() {
           {selectedCardData && (
             <>
               {/* Month Navigation */}
-              <div className="flex items-center justify-center gap-4 bg-white rounded-lg shadow-sm p-4">
+              <div className="flex items-center justify-center gap-4 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <button
                   onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
                   className="p-2 hover:bg-gray-100 rounded-lg"
@@ -557,7 +577,7 @@ export default function CreditCards() {
 
               {/* Statistics Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white rounded-lg shadow-sm p-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                       <DollarSign className="w-5 h-5 text-purple-600" />
@@ -571,7 +591,7 @@ export default function CreditCards() {
                   </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                       <Calendar className="w-5 h-5 text-blue-600" />
@@ -583,7 +603,7 @@ export default function CreditCards() {
                   </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                       <TrendingUp className="w-5 h-5 text-green-600" />
@@ -597,7 +617,7 @@ export default function CreditCards() {
                   </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getUtilizationColor(utilizationPercentage)}`}>
                       <TrendingUp className="w-5 h-5" />
@@ -613,7 +633,7 @@ export default function CreditCards() {
               </div>
 
               {/* Search */}
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <input
@@ -629,7 +649,7 @@ export default function CreditCards() {
               {/* Transactions List */}
               <div className="space-y-3">
                 {filteredTransactions.map((transaction) => (
-                  <div key={transaction.id} className="bg-white rounded-lg shadow-sm p-4">
+                  <div key={transaction.id} className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow p-4">
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                       <div className="flex items-center gap-3 flex-1">
                         <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -693,7 +713,7 @@ export default function CreditCards() {
                 ))}
 
                 {filteredTransactions.length === 0 && (
-                  <div className="text-center py-12 bg-white rounded-lg shadow-sm">
+                  <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
                     <CreditCard className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma transação encontrada</h3>
                     <p className="text-gray-500">
@@ -710,7 +730,7 @@ export default function CreditCards() {
       {/* Card Form Modal */}
       {showCardForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md my-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md my-8 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-xl font-semibold mb-4">Novo Cartão de Crédito</h2>
               <form onSubmit={handleCreateCard} className="space-y-4">
@@ -801,7 +821,7 @@ export default function CreditCards() {
       {/* Transaction Form Modal */}
       {showTransactionForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md my-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md my-8 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-xl font-semibold mb-4">
                 {editingTransaction ? 'Editar Transação' : 'Nova Compra'}
@@ -934,7 +954,7 @@ export default function CreditCards() {
       {/* Advance Installments Modal */}
       {showAdvanceModal && advancingTransaction && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md my-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md my-8 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-xl font-semibold mb-4">Antecipar Parcelas</h2>
               <div className="space-y-4">
