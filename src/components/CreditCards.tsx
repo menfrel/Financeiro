@@ -3,6 +3,14 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { CreditCard, Plus, Search, Edit, Trash2, ChevronUp, Calendar, DollarSign, TrendingUp, Users } from 'lucide-react';
 
+// Utility function to format currency
+const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(amount);
+};
+
 interface CreditCardData {
   id: string;
   name: string;
