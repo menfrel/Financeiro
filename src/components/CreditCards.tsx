@@ -184,8 +184,8 @@ export default function CreditCards() {
     const year = month.getFullYear();
     const monthIndex = month.getMonth();
     
-    // Due date is in the month after closing
-    const dueDate = new Date(year, monthIndex + 1, dueDay);
+    // Due date is in the same month as the billing cycle end
+    const dueDate = new Date(year, monthIndex, dueDay);
     
     return dueDate.toLocaleDateString('pt-BR');
   };
