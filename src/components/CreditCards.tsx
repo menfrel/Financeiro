@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { CreditCard, Plus, Search, CreditCard as Edit, Trash2, ChevronUp, Calendar, DollarSign, TrendingUp, Users } from 'lucide-react';
+import { CreditCard, Plus, Search, CreditCard as Edit, Trash2, ChevronUp, Calendar, DollarSign, TrendingUp } from 'lucide-react';
 
 // Utility function to format currency
 const formatCurrency = (amount: number): string => {
@@ -59,6 +59,7 @@ export default function CreditCards() {
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [advancingTransaction, setAdvancingTransaction] = useState<CreditCardTransaction | null>(null);
   const [advanceInstallments, setAdvanceInstallments] = useState(1);
+	const [showPaymentForm, setShowPaymentForm] = useState(false);
 
   const [cardForm, setCardForm] = useState({
     name: '',
@@ -75,6 +76,13 @@ export default function CreditCards() {
     installments: '1',
     category_id: ''
   });
+
+	const [paymentForm, setPaymentForm] = useState({
+		credit_card_id: '',
+		amount: '',
+		description: 'Pagamento',
+		date: new Date().toISOString().split('T')[0]
+	});
 
   useEffect(() => {
     if (user) {
@@ -180,7 +188,7 @@ export default function CreditCards() {
     return `${formatDate(startDate)} - ${formatDate(endDate)}`;
   };
 
-  const getDueDate = (month: Date, closingDay: number, dueDay: number) => {
+  const getDueDate = (month: Date, dueDay: number) => {
     const year = month.getFullYear();
     const monthIndex = month.getMonth();
     
@@ -386,6 +394,46 @@ export default function CreditCards() {
     }
   };
 
+	const handleCreatePayment = async (e: React.FormEvent) => {
+		e.preventDefault();
+		try {
+			const amount = Math.abs(parseFloat(paymentForm.amount || '0'));
+			if (!amount) return;
+
+			const { error } = await supabase
+				.from('credit_card_transactions')
+				.insert({
+					user_id: user?.id,
+					credit_card_id: paymentForm.credit_card_id || selectedCard,
+					amount: -amount,
+					description: paymentForm.description,
+					date: paymentForm.date,
+					installments: 1,
+					current_installment: 1,
+					category_id: null
+				});
+
+			if (error) throw error;
+
+			// Decrease current balance
+			const card = creditCards.find(c => c.id === (paymentForm.credit_card_id || selectedCard));
+			if (card) {
+				await supabase
+					.from('credit_cards')
+					.update({ current_balance: Math.max(card.current_balance - amount, 0) })
+					.eq('id', card.id);
+			}
+
+			setShowPaymentForm(false);
+			setPaymentForm({ credit_card_id: '', amount: '', description: 'Pagamento', date: new Date().toISOString().split('T')[0] });
+			fetchTransactions();
+			fetchCreditCards();
+		} catch (error) {
+			console.error('Error creating payment:', error);
+			alert('Não foi possível registrar o pagamento. Verifique o valor e tente novamente.');
+		}
+	};
+
   const openEditModal = (transaction: CreditCardTransaction) => {
     setEditingTransaction(transaction);
     setTransactionForm({
@@ -480,6 +528,20 @@ export default function CreditCards() {
           >
             <DollarSign className="w-4 h-4" />
             Nova Compra
+          </button>
+          <button
+            onClick={() => {
+              setPaymentForm(p => ({
+                ...p,
+                credit_card_id: selectedCard || (creditCards[0]?.id || ''),
+                date: new Date().toISOString().split('T')[0]
+              }));
+              setShowPaymentForm(true);
+            }}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+          >
+            <DollarSign className="w-4 h-4" />
+            Pagamento
           </button>
           <button
             onClick={() => setShowCardForm(true)}
@@ -613,6 +675,85 @@ export default function CreditCards() {
         </>
       )}
 
+      {/* Payment Form Modal */}
+      {showPaymentForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md my-8 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Pagamento de Fatura</h2>
+              <form onSubmit={handleCreatePayment} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cartão</label>
+                  <select
+                    required
+                    value={paymentForm.credit_card_id || selectedCard}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, credit_card_id: e.target.value })}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {creditCards.map((card) => (
+                      <option key={card.id} value={card.id}>
+                        {card.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                  <input
+                    type="text"
+                    value={paymentForm.description}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, description: e.target.value })}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Pagamento da fatura"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Valor</label>
+                  <input
+                    type="number"
+                    required
+                    step="0.01"
+                    value={paymentForm.amount}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0,00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Data</label>
+                  <input
+                    type="date"
+                    required
+                    value={paymentForm.date}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowPaymentForm(false)}
+                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    Registrar Pagamento
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'transactions' && (
         <div className="space-y-4">
           {/* Card Selector */}
@@ -653,7 +794,7 @@ export default function CreditCards() {
                     Período: {formatBillingPeriod(currentMonth, selectedCardData.closing_day)}
                   </p>
                   <p className="text-xs text-gray-500">
-                    Vencimento: {getDueDate(currentMonth, selectedCardData.closing_day, selectedCardData.due_day)}
+                    Vencimento: {getDueDate(currentMonth, selectedCardData.due_day)}
                   </p>
                 </div>
                 <button
