@@ -194,23 +194,48 @@ export default function CreditCards() {
     e.preventDefault();
     
     try {
-      const { error } = await supabase
-        .from('credit_cards')
-        .insert({
-          user_id: user?.id,
-          name: cardForm.name,
-          limit_amount: parseFloat(cardForm.limit_amount),
-          closing_day: parseInt(cardForm.closing_day),
-          due_day: parseInt(cardForm.due_day)
-        });
+      // Verificar se estamos editando ou criando
+      const isEditing = creditCards.some(card => card.name === cardForm.name && card.id);
+      
+      if (isEditing) {
+        // Encontrar o cartão sendo editado
+        const editingCard = creditCards.find(card => card.name === cardForm.name);
+        if (editingCard) {
+          const { error } = await supabase
+            .from('credit_cards')
+            .update({
+              name: cardForm.name,
+              limit_amount: parseFloat(cardForm.limit_amount),
+              closing_day: parseInt(cardForm.closing_day),
+              due_day: parseInt(cardForm.due_day)
+            })
+            .eq('id', editingCard.id)
+            .eq('user_id', user?.id);
 
-      if (error) throw error;
+          if (error) throw error;
+        }
+      } else {
+        // Criar novo cartão
+        const { error } = await supabase
+          .from('credit_cards')
+          .insert({
+            user_id: user?.id,
+            name: cardForm.name,
+            limit_amount: parseFloat(cardForm.limit_amount),
+            closing_day: parseInt(cardForm.closing_day),
+            due_day: parseInt(cardForm.due_day)
+          });
+
+        if (error) throw error;
+      }
 
       setCardForm({ name: '', limit_amount: '', closing_day: '', due_day: '' });
       setShowCardForm(false);
       fetchCreditCards();
+      alert(isEditing ? 'Cartão atualizado com sucesso!' : 'Cartão criado com sucesso!');
     } catch (error) {
       console.error('Error creating credit card:', error);
+      alert('Erro ao salvar cartão');
     }
   };
 
@@ -380,6 +405,44 @@ export default function CreditCards() {
     setShowAdvanceModal(true);
   };
 
+  const handleEditCard = (card: CreditCardData) => {
+    setCardForm({
+      name: card.name,
+      limit_amount: card.limit_amount.toString(),
+      closing_day: card.closing_day.toString(),
+      due_day: card.due_day.toString()
+    });
+    setShowCardForm(true);
+  };
+
+  const handleDeleteCard = async (cardId: string) => {
+    if (!confirm('Tem certeza que deseja excluir este cartão? Todas as transações associadas também serão excluídas.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('credit_cards')
+        .delete()
+        .eq('id', cardId)
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      // Se o cartão excluído era o selecionado, selecionar outro
+      if (selectedCard === cardId) {
+        const remainingCards = creditCards.filter(c => c.id !== cardId);
+        setSelectedCard(remainingCards.length > 0 ? remainingCards[0].id : '');
+      }
+
+      fetchCreditCards();
+      alert('Cartão excluído com sucesso!');
+    } catch (error) {
+      console.error('Error deleting credit card:', error);
+      alert('Erro ao excluir cartão');
+    }
+  };
+
   const filteredTransactions = transactions.filter(transaction =>
     transaction.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -487,6 +550,24 @@ export default function CreditCards() {
                           Fecha dia {card.closing_day} • Vence dia {card.due_day}
                         </p>
                       </div>
+                    </div>
+                    
+                    {/* Botões de Ação */}
+                    <div className="flex space-x-1">
+                      <button
+                        onClick={() => handleEditCard(card)}
+                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Editar cartão"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCard(card.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Excluir cartão"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
 
