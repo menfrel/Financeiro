@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { CreditCard, Plus, Search, Edit, Trash2, ChevronUp, Calendar, DollarSign, TrendingUp, Users } from 'lucide-react';
+import { CreditCard, Plus, Search, CreditCard as Edit, Trash2, ChevronUp, Calendar, DollarSign, TrendingUp, Users } from 'lucide-react';
 
 // Utility function to format currency
 const formatCurrency = (amount: number): string => {
@@ -59,12 +59,6 @@ export default function CreditCards() {
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [advancingTransaction, setAdvancingTransaction] = useState<CreditCardTransaction | null>(null);
   const [advanceInstallments, setAdvanceInstallments] = useState(1);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [payingCard, setPayingCard] = useState<CreditCardData | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
-  const [paymentAccount, setPaymentAccount] = useState('');
-  const [accounts, setAccounts] = useState<any[]>([]);
 
   const [cardForm, setCardForm] = useState({
     name: '',
@@ -86,7 +80,6 @@ export default function CreditCards() {
     if (user) {
       fetchCreditCards();
       fetchCategories();
-      fetchAccounts();
     }
   }, [user]);
 
@@ -129,21 +122,6 @@ export default function CreditCards() {
       setCategories(data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
-    }
-  };
-
-  const fetchAccounts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('name');
-
-      if (error) throw error;
-      setAccounts(data || []);
-    } catch (error) {
-      console.error('Error fetching accounts:', error);
     }
   };
 
@@ -210,102 +188,6 @@ export default function CreditCards() {
     const dueDate = new Date(year, monthIndex, dueDay);
     
     return dueDate.toLocaleDateString('pt-BR');
-  };
-
-  const handlePayCard = (card: CreditCardData) => {
-    setPayingCard(card);
-    setPaymentAmount(card.current_balance.toString());
-    setPaymentDate(new Date().toISOString().split('T')[0]);
-    setPaymentAccount(accounts.length > 0 ? accounts[0].id : '');
-    setShowPaymentModal(true);
-  };
-
-  const handleConfirmPayment = async () => {
-    if (!payingCard || !paymentAccount) return;
-
-    try {
-      const amount = parseFloat(paymentAmount);
-      if (amount <= 0) {
-        alert('Valor do pagamento deve ser maior que zero');
-        return;
-      }
-
-      // Buscar ou criar categoria para pagamento de cartão
-      let { data: category } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('user_id', user?.id)
-        .eq('name', 'Pagamento Cartão de Crédito')
-        .eq('type', 'expense')
-        .single();
-
-      if (!category) {
-        const { data: newCategory, error: categoryError } = await supabase
-          .from('categories')
-          .insert({
-            user_id: user?.id,
-            name: 'Pagamento Cartão de Crédito',
-            type: 'expense',
-            color: '#8B5CF6'
-          })
-          .select('id')
-          .single();
-
-        if (categoryError) throw categoryError;
-        category = newCategory;
-      }
-
-      // Criar lançamento na conta
-      const { error: transactionError } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: user?.id,
-          account_id: paymentAccount,
-          category_id: category.id,
-          amount: amount,
-          type: 'expense',
-          description: `Pagamento ${payingCard.name}`,
-          date: paymentDate,
-          is_recurring: false,
-        });
-
-      if (transactionError) throw transactionError;
-
-      // Atualizar saldo do cartão
-      const { error: cardError } = await supabase
-        .from('credit_cards')
-        .update({
-          current_balance: Math.max(0, payingCard.current_balance - amount),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', payingCard.id);
-
-      if (cardError) throw cardError;
-
-      // Atualizar saldo da conta
-      const account = accounts.find(a => a.id === paymentAccount);
-      if (account) {
-        const { error: accountError } = await supabase
-          .from('accounts')
-          .update({
-            current_balance: account.current_balance - amount,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', paymentAccount);
-
-        if (accountError) throw accountError;
-      }
-
-      setShowPaymentModal(false);
-      setPayingCard(null);
-      setPaymentAmount('');
-      fetchCreditCards();
-      fetchAccounts();
-      alert('Pagamento registrado com sucesso!');
-    } catch (error) {
-      console.error('Error processing payment:', error);
-      alert('Erro ao processar pagamento');
-    }
   };
 
   const handleCreateCard = async (e: React.FormEvent) => {
@@ -724,19 +606,6 @@ export default function CreditCards() {
                       ></div>
                     </div>
                   </div>
-
-                  {/* Botão de Pagamento */}
-                  {card.current_balance > 0 && (
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                      <button
-                        onClick={() => handlePayCard(card)}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2"
-                      >
-                        <DollarSign className="w-4 h-4" />
-                        <span>Pagar Fatura</span>
-                      </button>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -1227,108 +1096,6 @@ export default function CreditCards() {
                     className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                   >
                     Antecipar
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Modal */}
-      {showPaymentModal && payingCard && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md my-8 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Pagar Fatura</h2>
-              
-              <div className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-medium text-gray-900">{payingCard.name}</h3>
-                  <p className="text-sm text-gray-600">
-                    Saldo atual: {formatCurrency(payingCard.current_balance)}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Conta para Débito
-                  </label>
-                  <select
-                    value={paymentAccount}
-                    onChange={(e) => setPaymentAccount(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Selecione uma conta</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name} - {formatCurrency(account.current_balance)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Valor do Pagamento
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="0,00"
-                    required
-                  />
-                  <div className="flex space-x-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentAmount((payingCard.current_balance * 0.1).toFixed(2))}
-                      className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200 transition-colors"
-                    >
-                      Mínimo (10%)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentAmount(payingCard.current_balance.toString())}
-                      className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
-                    >
-                      Total
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Data do Pagamento
-                  </label>
-                  <input
-                    type="date"
-                    value={paymentDate}
-                    onChange={(e) => setPaymentDate(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowPaymentModal(false);
-                      setPayingCard(null);
-                    }}
-                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleConfirmPayment}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    Confirmar Pagamento
                   </button>
                 </div>
               </div>
