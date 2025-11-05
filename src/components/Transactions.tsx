@@ -508,13 +508,13 @@ export function Transactions() {
             <CreditCard className="w-4 h-4" />
             <span>Compra no Cartão</span>
           </button>
-          <button
-            onClick={openModal}
+        <button
+          onClick={openModal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Novo Lançamento</span>
-          </button>
+        >
+          <Plus className="w-4 h-4" />
+          <span>Novo Lançamento</span>
+        </button>
         </div>
       </div>
 
@@ -682,13 +682,13 @@ export function Transactions() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                      {transaction.description}
-                    </h3>
+                        {transaction.description}
+                      </h3>
                     <p className="text-xs sm:text-sm text-gray-500 truncate">
                       {transaction.category?.name} • {transaction.account?.name}
                     </p>
-                  </div>
-                </div>
+                    </div>
+                    </div>
                 <div className="text-right ml-3 flex-shrink-0 min-w-[120px]">
                   <p className={`font-bold text-sm sm:text-lg ${
                     transaction.type === "income" ? "text-green-600" : "text-red-600"
@@ -697,21 +697,21 @@ export function Transactions() {
                   </p>
                   <p className="text-xs text-gray-500">
                     {format(parse(transaction.date, "yyyy-MM-dd", new Date()), "dd/MM/yyyy")}
-                  </p>
-                </div>
+                    </p>
+                  </div>
                 <div className="flex space-x-1 ml-3 flex-shrink-0">
-                  <button
-                    onClick={() => handleEdit(transaction)}
+                    <button
+                      onClick={() => handleEdit(transaction)}
                     className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(transaction.id)}
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(transaction.id)}
                     className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                 </div>
               </div>
             </div>

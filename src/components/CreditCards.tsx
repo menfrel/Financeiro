@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { CreditCard, Plus, Search, CreditCard as Edit, Trash2, ChevronUp, Calendar, DollarSign, TrendingUp } from 'lucide-react';
+import { CreditCard, Plus, Search, CreditCard as Edit, Trash2, ChevronUp, DollarSign } from 'lucide-react';
 
 // Utility function to format currency
 const formatCurrency = (amount: number): string => {
@@ -198,6 +198,127 @@ export default function CreditCards() {
     return dueDate.toLocaleDateString('pt-BR');
   };
 
+  // Calculate current period bill (only purchases, positive amounts)
+  const calculateCurrentPeriodBill = (cardId: string, periodStart: Date, periodEnd: Date): Promise<number> => {
+    return new Promise(async (resolve) => {
+      try {
+        const { data, error } = await supabase
+          .from('credit_card_transactions')
+          .select('amount')
+          .eq('credit_card_id', cardId)
+          .eq('user_id', user?.id)
+          .gte('date', periodStart.toISOString().split('T')[0])
+          .lte('date', periodEnd.toISOString().split('T')[0])
+          .gt('amount', 0);
+
+        if (error) throw error;
+        const total = (data || []).reduce((sum, t) => sum + Number(t.amount), 0);
+        resolve(total);
+      } catch (error) {
+        console.error('Error calculating period bill:', error);
+        resolve(0);
+      }
+    });
+  };
+
+  // Calculate payments in current period (negative amounts)
+  const calculateCurrentPeriodPayments = (cardId: string, periodStart: Date, periodEnd: Date): Promise<number> => {
+    return new Promise(async (resolve) => {
+      try {
+        const { data, error } = await supabase
+          .from('credit_card_transactions')
+          .select('amount')
+          .eq('credit_card_id', cardId)
+          .eq('user_id', user?.id)
+          .gte('date', periodStart.toISOString().split('T')[0])
+          .lte('date', periodEnd.toISOString().split('T')[0])
+          .lt('amount', 0);
+
+        if (error) throw error;
+        const total = Math.abs((data || []).reduce((sum, t) => sum + Number(t.amount), 0));
+        resolve(total);
+      } catch (error) {
+        console.error('Error calculating period payments:', error);
+        resolve(0);
+      }
+    });
+  };
+
+  // Calculate previous period's unpaid balance (debt carried forward)
+  // Uses the month being viewed to derive the previous billing cycle correctly
+  const calculatePreviousPeriodDebt = (cardId: string, visibleMonth: Date, closingDay: number): Promise<number> => {
+    return new Promise(async (resolve) => {
+      try {
+        // Derive previous billing cycle based on the visible month
+        const prevMonthRef = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
+        const { startDate: prevStartDate, endDate: prevEndDate } = getBillingCycleDates(prevMonthRef, closingDay);
+
+        // Calculate previous period bill
+        const prevBill = await calculateCurrentPeriodBill(cardId, prevStartDate, prevEndDate);
+        
+        // Calculate payments made in previous period
+        const prevPayments = await calculateCurrentPeriodPayments(cardId, prevStartDate, prevEndDate);
+        
+        // Calculate unpaid balance (debt)
+        const debt = Math.max(0, prevBill - prevPayments);
+        
+        // Also check for any payments made AFTER the previous period end but BEFORE the start of the current period
+        // These payments reduce the debt carried forward
+        const { data: debtPayments, error } = await supabase
+          .from('credit_card_transactions')
+          .select('amount')
+          .eq('credit_card_id', cardId)
+          .eq('user_id', user?.id)
+          .gt('date', prevEndDate.toISOString().split('T')[0])
+          .lt('date', getBillingCycleDates(visibleMonth, closingDay).startDate.toISOString().split('T')[0])
+          .lt('amount', 0);
+
+        if (error) throw error;
+        const debtPaymentsTotal = Math.abs((debtPayments || []).reduce((sum, t) => sum + Number(t.amount), 0));
+        
+        const finalDebt = Math.max(0, debt - debtPaymentsTotal);
+        resolve(finalDebt);
+      } catch (error) {
+        console.error('Error calculating previous period debt:', error);
+        resolve(0);
+      }
+    });
+  };
+
+  // Recalculate card balance based on all transactions
+  const recalculateCardBalance = async (cardId: string) => {
+    try {
+      const card = creditCards.find(c => c.id === cardId);
+      if (!card) return;
+
+      // Get all transactions for this card
+      const { data: allTransactions, error } = await supabase
+        .from('credit_card_transactions')
+        .select('amount')
+        .eq('credit_card_id', cardId)
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      // Calculate total balance (all purchases - all payments)
+      const totalBalance = (allTransactions || []).reduce((sum, t) => sum + Number(t.amount), 0);
+
+      // Update card balance
+      const { error: updateError } = await supabase
+        .from('credit_cards')
+        .update({ current_balance: Math.max(0, totalBalance) })
+        .eq('id', cardId)
+        .eq('user_id', user?.id);
+
+      if (updateError) throw updateError;
+
+      // Refresh cards list
+      await fetchCreditCards();
+    } catch (error) {
+      console.error('Error recalculating card balance:', error);
+    }
+  };
+
   const handleCreateCard = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -278,14 +399,8 @@ export default function CreditCards() {
 
       if (error) throw error;
 
-      // Update card balance
-      const card = creditCards.find(c => c.id === transactionForm.credit_card_id);
-      if (card) {
-        await supabase
-          .from('credit_cards')
-          .update({ current_balance: card.current_balance + amount })
-          .eq('id', transactionForm.credit_card_id);
-      }
+      // Recalculate card balance
+      await recalculateCardBalance(transactionForm.credit_card_id);
 
       setTransactionForm({
         credit_card_id: '',
@@ -322,6 +437,7 @@ export default function CreditCards() {
 
       setEditingTransaction(null);
       setShowTransactionForm(false);
+      await recalculateCardBalance(editingTransaction.credit_card_id);
       fetchTransactions();
       fetchCreditCards();
     } catch (error) {
@@ -387,6 +503,12 @@ export default function CreditCards() {
 
       if (error) throw error;
 
+      // Get transaction to know which card to recalculate
+      const deletedTransaction = transactions.find(t => t.id === transactionId);
+      if (deletedTransaction) {
+        await recalculateCardBalance(deletedTransaction.credit_card_id);
+      }
+
       fetchTransactions();
       fetchCreditCards();
     } catch (error) {
@@ -415,14 +537,8 @@ export default function CreditCards() {
 
 			if (error) throw error;
 
-			// Decrease current balance
-			const card = creditCards.find(c => c.id === (paymentForm.credit_card_id || selectedCard));
-			if (card) {
-				await supabase
-					.from('credit_cards')
-					.update({ current_balance: Math.max(card.current_balance - amount, 0) })
-					.eq('id', card.id);
-			}
+			// Recalculate card balance
+			await recalculateCardBalance(paymentForm.credit_card_id || selectedCard);
 
 			setShowPaymentForm(false);
 			setPaymentForm({ credit_card_id: '', amount: '', description: 'Pagamento', date: new Date().toISOString().split('T')[0] });
@@ -496,15 +612,41 @@ export default function CreditCards() {
   );
 
   const selectedCardData = creditCards.find(card => card.id === selectedCard);
-  const totalBill = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
-  const utilizationPercentage = selectedCardData ? (selectedCardData.current_balance / selectedCardData.limit_amount) * 100 : 0;
-  const availableLimit = selectedCardData ? selectedCardData.limit_amount - selectedCardData.current_balance : 0;
+  
+  // Calculate billing statistics
+  const [billingStats, setBillingStats] = useState({
+    currentBill: 0,
+    currentPayments: 0,
+    previousDebt: 0,
+    totalToPay: 0
+  });
 
-  const getUtilizationColor = (percentage: number) => {
-    if (percentage >= 80) return 'text-red-600 bg-red-50';
-    if (percentage >= 60) return 'text-yellow-600 bg-yellow-50';
-    return 'text-green-600 bg-green-50';
-  };
+  useEffect(() => {
+    const calculateBillingStats = async () => {
+      if (!selectedCard || !creditCards.length) return;
+
+      const card = creditCards.find(c => c.id === selectedCard);
+      if (!card) return;
+
+      const { startDate, endDate } = getBillingCycleDates(currentMonth, card.closing_day);
+      
+      const currentBill = await calculateCurrentPeriodBill(selectedCard, startDate, endDate);
+      const currentPayments = await calculateCurrentPeriodPayments(selectedCard, startDate, endDate);
+      const previousDebt = await calculatePreviousPeriodDebt(selectedCard, currentMonth, card.closing_day);
+      const totalToPay = Math.max(0, currentBill + previousDebt - currentPayments);
+
+      setBillingStats({
+        currentBill,
+        currentPayments,
+        previousDebt,
+        totalToPay
+      });
+    };
+
+    if (selectedCard) {
+      calculateBillingStats();
+    }
+  }, [selectedCard, currentMonth, transactions, creditCards]);
 
   if (loading) {
     return (
@@ -813,22 +955,10 @@ export default function CreditCards() {
                       <DollarSign className="w-5 h-5 text-purple-600" />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Valor da Fatura</p>
+                      <p className="text-sm text-gray-600">Fatura do Período</p>
                       <p className="text-lg font-semibold text-purple-600">
-                        R$ {totalBill.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {formatCurrency(billingStats.currentBill)}
                       </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Calendar className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Transações</p>
-                      <p className="text-lg font-semibold text-blue-600">{filteredTransactions.length}</p>
                     </div>
                   </div>
                 </div>
@@ -836,12 +966,12 @@ export default function CreditCards() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-green-600" />
+                      <DollarSign className="w-5 h-5 text-green-600" />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Limite Disponível</p>
+                      <p className="text-sm text-gray-600">Pagamentos</p>
                       <p className="text-lg font-semibold text-green-600">
-                        R$ {availableLimit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {formatCurrency(billingStats.currentPayments)}
                       </p>
                     </div>
                   </div>
@@ -849,17 +979,32 @@ export default function CreditCards() {
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getUtilizationColor(utilizationPercentage)}`}>
-                      <TrendingUp className="w-5 h-5" />
+                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                      <DollarSign className="w-5 h-5 text-orange-600" />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Utilização</p>
-                      <p className={`text-lg font-semibold ${utilizationPercentage >= 80 ? 'text-red-600' : utilizationPercentage >= 60 ? 'text-yellow-600' : 'text-green-600'}`}>
-                        {utilizationPercentage.toFixed(1)}%
+                      <p className="text-sm text-gray-600">Saldo Anterior</p>
+                      <p className="text-lg font-semibold text-orange-600">
+                        {formatCurrency(billingStats.previousDebt)}
                       </p>
                     </div>
                   </div>
                 </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                      <DollarSign className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total a Pagar</p>
+                      <p className="text-lg font-semibold text-red-600">
+                        {formatCurrency(billingStats.totalToPay)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
               {/* Search */}
