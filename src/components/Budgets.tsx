@@ -464,6 +464,7 @@ export function Budgets() {
 
         if (error) throw error;
       } else {
+        // Allow multiple budgets with the same category and date range
         const { error } = await supabase.from("budgets").insert(budgetData);
 
         if (error) throw error;
