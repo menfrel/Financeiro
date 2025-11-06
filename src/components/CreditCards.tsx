@@ -84,6 +84,8 @@ export default function CreditCards() {
 		date: new Date().toISOString().split('T')[0]
 	});
 
+	const [closingInvoice, setClosingInvoice] = useState(false);
+
   useEffect(() => {
     if (user) {
       fetchCreditCards();
@@ -198,91 +200,105 @@ export default function CreditCards() {
     return dueDate.toLocaleDateString('pt-BR');
   };
 
-  // Calculate current period bill (only purchases, positive amounts)
-  const calculateCurrentPeriodBill = (cardId: string, periodStart: Date, periodEnd: Date): Promise<number> => {
-    return new Promise(async (resolve) => {
-      try {
-        const { data, error } = await supabase
-          .from('credit_card_transactions')
-          .select('amount')
-          .eq('credit_card_id', cardId)
-          .eq('user_id', user?.id)
-          .gte('date', periodStart.toISOString().split('T')[0])
-          .lte('date', periodEnd.toISOString().split('T')[0])
-          .gt('amount', 0);
+  // Calculate billing stats from invoices and current transactions
+  const calculateBillingStatsFromInvoice = async (cardId: string, month: Date, closingDay: number) => {
+    try {
+      const year = month.getFullYear();
+      const monthIndex = month.getMonth();
 
-        if (error) throw error;
-        const total = (data || []).reduce((sum, t) => sum + Number(t.amount), 0);
-        resolve(total);
-      } catch (error) {
-        console.error('Error calculating period bill:', error);
-        resolve(0);
+      // Calculate cycle dates
+      const cycleStart = new Date(year, monthIndex - 1, closingDay + 1);
+      const cycleEnd = new Date(year, monthIndex, closingDay);
+      const cycleStartStr = cycleStart.toISOString().split('T')[0];
+      const cycleEndStr = cycleEnd.toISOString().split('T')[0];
+
+      // Try to get existing invoice
+      const { data: invoice, error: invoiceError } = await supabase
+        .from('credit_card_invoices')
+        .select('*')
+        .eq('credit_card_id', cardId)
+        .eq('user_id', user?.id)
+        .eq('cycle_start', cycleStartStr)
+        .eq('cycle_end', cycleEndStr)
+        .maybeSingle();
+
+      if (invoiceError) throw invoiceError;
+
+      if (invoice) {
+        // Use invoice data
+        return {
+          currentBill: Number(invoice.purchases_total),
+          currentPayments: Number(invoice.payments_total),
+          previousDebt: Number(invoice.previous_balance),
+          totalToPay: Math.max(0, Number(invoice.total_due) - Number(invoice.paid_amount || 0))
+        };
       }
-    });
-  };
 
-  // Calculate payments in current period (negative amounts)
-  const calculateCurrentPeriodPayments = (cardId: string, periodStart: Date, periodEnd: Date): Promise<number> => {
-    return new Promise(async (resolve) => {
-      try {
-        const { data, error } = await supabase
-          .from('credit_card_transactions')
-          .select('amount')
-          .eq('credit_card_id', cardId)
-          .eq('user_id', user?.id)
-          .gte('date', periodStart.toISOString().split('T')[0])
-          .lte('date', periodEnd.toISOString().split('T')[0])
-          .lt('amount', 0);
+      // Calculate from transactions if no invoice exists yet
+      const { data: purchases, error: purchasesError } = await supabase
+        .from('credit_card_transactions')
+        .select('amount')
+        .eq('credit_card_id', cardId)
+        .eq('user_id', user?.id)
+        .gte('date', cycleStartStr)
+        .lte('date', cycleEndStr)
+        .gt('amount', 0);
 
-        if (error) throw error;
-        const total = Math.abs((data || []).reduce((sum, t) => sum + Number(t.amount), 0));
-        resolve(total);
-      } catch (error) {
-        console.error('Error calculating period payments:', error);
-        resolve(0);
-      }
-    });
-  };
+      if (purchasesError) throw purchasesError;
 
-  // Calculate previous period's unpaid balance (debt carried forward)
-  // Uses the month being viewed to derive the previous billing cycle correctly
-  const calculatePreviousPeriodDebt = (cardId: string, visibleMonth: Date, closingDay: number): Promise<number> => {
-    return new Promise(async (resolve) => {
-      try {
-        // Derive previous billing cycle based on the visible month
-        const prevMonthRef = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
-        const { startDate: prevStartDate, endDate: prevEndDate } = getBillingCycleDates(prevMonthRef, closingDay);
+      const { data: payments, error: paymentsError } = await supabase
+        .from('credit_card_transactions')
+        .select('amount')
+        .eq('credit_card_id', cardId)
+        .eq('user_id', user?.id)
+        .gte('date', cycleStartStr)
+        .lte('date', cycleEndStr)
+        .lt('amount', 0);
 
-        // Calculate previous period bill
-        const prevBill = await calculateCurrentPeriodBill(cardId, prevStartDate, prevEndDate);
-        
-        // Calculate payments made in previous period
-        const prevPayments = await calculateCurrentPeriodPayments(cardId, prevStartDate, prevEndDate);
-        
-        // Calculate unpaid balance (debt)
-        const debt = Math.max(0, prevBill - prevPayments);
-        
-        // Also check for any payments made AFTER the previous period end but BEFORE the start of the current period
-        // These payments reduce the debt carried forward
-        const { data: debtPayments, error } = await supabase
-          .from('credit_card_transactions')
-          .select('amount')
-          .eq('credit_card_id', cardId)
-          .eq('user_id', user?.id)
-          .gt('date', prevEndDate.toISOString().split('T')[0])
-          .lt('date', getBillingCycleDates(visibleMonth, closingDay).startDate.toISOString().split('T')[0])
-          .lt('amount', 0);
+      if (paymentsError) throw paymentsError;
 
-        if (error) throw error;
-        const debtPaymentsTotal = Math.abs((debtPayments || []).reduce((sum, t) => sum + Number(t.amount), 0));
-        
-        const finalDebt = Math.max(0, debt - debtPaymentsTotal);
-        resolve(finalDebt);
-      } catch (error) {
-        console.error('Error calculating previous period debt:', error);
-        resolve(0);
-      }
-    });
+      const currentBill = (purchases || []).reduce((sum, t) => sum + Number(t.amount), 0);
+      const currentPayments = Math.abs((payments || []).reduce((sum, t) => sum + Number(t.amount), 0));
+
+      // Get previous invoice to find debt
+      const prevMonthRef = new Date(year, monthIndex - 2, 1);
+      const prevCycleStart = new Date(year, monthIndex - 2, closingDay + 1);
+      const prevCycleEnd = new Date(year, monthIndex - 1, closingDay);
+      const prevCycleStartStr = prevCycleStart.toISOString().split('T')[0];
+      const prevCycleEndStr = prevCycleEnd.toISOString().split('T')[0];
+
+      const { data: previousInvoice, error: prevError } = await supabase
+        .from('credit_card_invoices')
+        .select('*')
+        .eq('credit_card_id', cardId)
+        .eq('user_id', user?.id)
+        .eq('cycle_start', prevCycleStartStr)
+        .eq('cycle_end', prevCycleEndStr)
+        .maybeSingle();
+
+      if (prevError) throw prevError;
+
+      const previousDebt = previousInvoice
+        ? Math.max(0, Number(previousInvoice.total_due) - Number(previousInvoice.paid_amount || 0))
+        : 0;
+
+      const totalToPay = Math.max(0, currentBill + previousDebt - currentPayments);
+
+      return {
+        currentBill,
+        currentPayments,
+        previousDebt,
+        totalToPay
+      };
+    } catch (error) {
+      console.error('Error calculating billing stats:', error);
+      return {
+        currentBill: 0,
+        currentPayments: 0,
+        previousDebt: 0,
+        totalToPay: 0
+      };
+    }
   };
 
   // Recalculate card balance based on all transactions
@@ -550,6 +566,44 @@ export default function CreditCards() {
 		}
 	};
 
+	const handleCloseInvoice = async () => {
+		if (!selectedCard) return;
+		setClosingInvoice(true);
+
+		try {
+			const cycleMonth = currentMonth.toISOString().split('T')[0].substring(0, 7);
+			const response = await fetch(
+				`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/close_credit_card_invoice`,
+				{
+					method: 'POST',
+					headers: {
+						'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
+						credit_card_id: selectedCard,
+						cycle_month: cycleMonth
+					})
+				}
+			);
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error || 'Erro ao fechar fatura');
+			}
+
+			const result = await response.json();
+			alert('Fatura fechada com sucesso!');
+			fetchTransactions();
+			fetchCreditCards();
+		} catch (error) {
+			console.error('Error closing invoice:', error);
+			alert(`Erro ao fechar fatura: ${error instanceof Error ? error.message : 'Desconhecido'}`);
+		} finally {
+			setClosingInvoice(false);
+		}
+	};
+
   const openEditModal = (transaction: CreditCardTransaction) => {
     setEditingTransaction(transaction);
     setTransactionForm({
@@ -628,19 +682,8 @@ export default function CreditCards() {
       const card = creditCards.find(c => c.id === selectedCard);
       if (!card) return;
 
-      const { startDate, endDate } = getBillingCycleDates(currentMonth, card.closing_day);
-      
-      const currentBill = await calculateCurrentPeriodBill(selectedCard, startDate, endDate);
-      const currentPayments = await calculateCurrentPeriodPayments(selectedCard, startDate, endDate);
-      const previousDebt = await calculatePreviousPeriodDebt(selectedCard, currentMonth, card.closing_day);
-      const totalToPay = Math.max(0, currentBill + previousDebt - currentPayments);
-
-      setBillingStats({
-        currentBill,
-        currentPayments,
-        previousDebt,
-        totalToPay
-      });
+      const stats = await calculateBillingStatsFromInvoice(selectedCard, currentMonth, card.closing_day);
+      setBillingStats(stats);
     };
 
     if (selectedCard) {
@@ -921,29 +964,38 @@ export default function CreditCards() {
           {selectedCardData && (
             <>
               {/* Month Navigation */}
-              <div className="flex items-center justify-center gap-4 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <button
-                  onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  ←
-                </button>
-                <div className="text-center">
-                  <h2 className="text-xl font-semibold">
-                    {currentMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                  </h2>
-                  <p className="text-sm text-gray-600">
-                    Período: {formatBillingPeriod(currentMonth, selectedCardData.closing_day)}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Vencimento: {getDueDate(currentMonth, selectedCardData.due_day)}
-                  </p>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <button
+                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
+                    className="p-2 hover:bg-gray-100 rounded-lg"
+                  >
+                    ←
+                  </button>
+                  <div className="text-center flex-1">
+                    <h2 className="text-xl font-semibold">
+                      {currentMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                    </h2>
+                    <p className="text-sm text-gray-600">
+                      Período: {formatBillingPeriod(currentMonth, selectedCardData.closing_day)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Vencimento: {getDueDate(currentMonth, selectedCardData.due_day)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
+                    className="p-2 hover:bg-gray-100 rounded-lg"
+                  >
+                    →
+                  </button>
                 </div>
                 <button
-                  onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  onClick={handleCloseInvoice}
+                  disabled={closingInvoice}
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium"
                 >
-                  →
+                  {closingInvoice ? 'Fechando...' : 'Fechar Fatura'}
                 </button>
               </div>
 
