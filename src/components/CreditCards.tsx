@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { CreditCard, Plus, Search, CreditCard as Edit, Trash2, ChevronUp, DollarSign } from 'lucide-react';
+import { CreditCard, Plus, Search, CreditCard as Edit, Trash2, ChevronUp, DollarSign, TrendingUp } from 'lucide-react';
+import CreditCardChart from './CreditCardChart';
+import InvoiceHistoryTable from './InvoiceHistoryTable';
 
 // Utility function to format currency
 const formatCurrency = (amount: number): string => {
@@ -45,7 +47,7 @@ interface Category {
 
 export default function CreditCards() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'cards' | 'transactions'>('cards');
+  const [activeTab, setActiveTab] = useState<'cards' | 'transactions' | 'history'>('cards');
   const [creditCards, setCreditCards] = useState<CreditCardData[]>([]);
   const [transactions, setTransactions] = useState<CreditCardTransaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -206,13 +208,13 @@ export default function CreditCards() {
       const year = month.getFullYear();
       const monthIndex = month.getMonth();
 
-      // Calculate cycle dates
+      // Calculate cycle dates for the current month being viewed
       const cycleStart = new Date(year, monthIndex - 1, closingDay + 1);
       const cycleEnd = new Date(year, monthIndex, closingDay);
       const cycleStartStr = cycleStart.toISOString().split('T')[0];
       const cycleEndStr = cycleEnd.toISOString().split('T')[0];
 
-      // Try to get existing invoice
+      // Try to get existing invoice for this cycle
       const { data: invoice, error: invoiceError } = await supabase
         .from('credit_card_invoices')
         .select('*')
@@ -225,7 +227,7 @@ export default function CreditCards() {
       if (invoiceError) throw invoiceError;
 
       if (invoice) {
-        // Use invoice data
+        // Use invoice data if it exists
         return {
           currentBill: Number(invoice.purchases_total),
           currentPayments: Number(invoice.payments_total),
@@ -260,28 +262,25 @@ export default function CreditCards() {
       const currentBill = (purchases || []).reduce((sum, t) => sum + Number(t.amount), 0);
       const currentPayments = Math.abs((payments || []).reduce((sum, t) => sum + Number(t.amount), 0));
 
-      // Get previous invoice to find debt
-      const prevMonthRef = new Date(year, monthIndex - 2, 1);
-      const prevCycleStart = new Date(year, monthIndex - 2, closingDay + 1);
-      const prevCycleEnd = new Date(year, monthIndex - 1, closingDay);
-      const prevCycleStartStr = prevCycleStart.toISOString().split('T')[0];
-      const prevCycleEndStr = prevCycleEnd.toISOString().split('T')[0];
-
+      // Get the most recent closed invoice BEFORE this cycle to find previous debt
       const { data: previousInvoice, error: prevError } = await supabase
         .from('credit_card_invoices')
         .select('*')
         .eq('credit_card_id', cardId)
         .eq('user_id', user?.id)
-        .eq('cycle_start', prevCycleStartStr)
-        .eq('cycle_end', prevCycleEndStr)
+        .lt('cycle_end', cycleStartStr)
+        .order('cycle_end', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (prevError) throw prevError;
 
+      // Previous debt is the unpaid amount from the last invoice
       const previousDebt = previousInvoice
         ? Math.max(0, Number(previousInvoice.total_due) - Number(previousInvoice.paid_amount || 0))
         : 0;
 
+      // Total to pay = current purchases + previous debt - payments made this cycle
       const totalToPay = Math.max(0, currentBill + previousDebt - currentPayments);
 
       return {
@@ -761,6 +760,16 @@ export default function CreditCards() {
           >
             Transações
           </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'history'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Histórico
+          </button>
         </nav>
       </div>
 
@@ -1059,6 +1068,13 @@ export default function CreditCards() {
 
               </div>
 
+              {/* Chart */}
+              <CreditCardChart
+                creditCardId={selectedCard}
+                userId={user?.id || ''}
+                closingDay={selectedCardData.closing_day}
+              />
+
               {/* Search */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
                 <div className="relative">
@@ -1075,69 +1091,103 @@ export default function CreditCards() {
 
               {/* Transactions List */}
               <div className="space-y-3">
-                {filteredTransactions.map((transaction) => (
-                  <div key={transaction.id} className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow p-4">
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                      <div className="flex items-center gap-3 flex-1">
-                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <CreditCard className="w-5 h-5 text-purple-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-gray-900 truncate">
-                            {transaction.description}
-                          </h3>
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm text-gray-500">
-                            <span>{new Date(transaction.date).toLocaleDateString('pt-BR')}</span>
-                            {transaction.installments > 1 && (
-                              <span>• {transaction.current_installment}/{transaction.installments}x</span>
-                            )}
-                            {transaction.categories && (
-                              <div className="flex items-center gap-1">
-                                <div
-                                  className="w-3 h-3 rounded-full"
-                                  style={{ backgroundColor: transaction.categories.color }}
-                                ></div>
-                                <span>{transaction.categories.name}</span>
-                              </div>
-                            )}
+                {filteredTransactions.map((transaction) => {
+                  const isPayment = transaction.amount < 0;
+                  const displayAmount = Math.abs(transaction.amount);
+
+                  return (
+                    <div key={transaction.id} className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow p-4">
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            isPayment ? 'bg-green-100' : 'bg-purple-100'
+                          }`}>
+                            <CreditCard className={`w-5 h-5 ${
+                              isPayment ? 'text-green-600' : 'text-purple-600'
+                            }`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium text-gray-900 truncate">
+                                {transaction.description}
+                              </h3>
+                              {isPayment && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                  Pagamento
+                                </span>
+                              )}
+                              {!isPayment && transaction.installments > 1 && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                  Parcelado
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm text-gray-500">
+                              <span>{new Date(transaction.date).toLocaleDateString('pt-BR')}</span>
+                              {transaction.installments > 1 && !isPayment && (
+                                <span>• Parcela {transaction.current_installment}/{transaction.installments}</span>
+                              )}
+                              {transaction.categories && (
+                                <div className="flex items-center gap-1">
+                                  <div
+                                    className="w-3 h-3 rounded-full"
+                                    style={{ backgroundColor: transaction.categories.color }}
+                                  ></div>
+                                  <span>{transaction.categories.name}</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center justify-between lg:justify-end gap-4">
-                        <span className="text-lg font-semibold text-purple-600">
-                          R$ {transaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                        
-                        <div className="flex items-center gap-2">
-                          {transaction.installments > 1 && transaction.current_installment < transaction.installments && (
+                        <div className="flex items-center justify-between lg:justify-end gap-4">
+                          <span className={`text-lg font-semibold ${
+                            isPayment ? 'text-green-600' : 'text-purple-600'
+                          }`}>
+                            {isPayment ? '- ' : ''}R$ {displayAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+
+                          {!isPayment && (
+                            <div className="flex items-center gap-2">
+                              {transaction.installments > 1 && transaction.current_installment < transaction.installments && (
+                                <button
+                                  onClick={() => openAdvanceModal(transaction)}
+                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  title="Antecipar parcelas"
+                                >
+                                  <ChevronUp className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => openEditModal(transaction)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Editar"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTransaction(transaction.id)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Excluir"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                          {isPayment && (
                             <button
-                              onClick={() => openAdvanceModal(transaction)}
-                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Antecipar parcelas"
+                              onClick={() => handleDeleteTransaction(transaction.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Excluir"
                             >
-                              <ChevronUp className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           )}
-                          <button
-                            onClick={() => openEditModal(transaction)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Editar"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTransaction(transaction.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {filteredTransactions.length === 0 && (
                   <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
@@ -1151,6 +1201,43 @@ export default function CreditCards() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {activeTab === 'history' && selectedCardData && (
+        <div className="space-y-4">
+          {/* Card Selector */}
+          {creditCards.length > 1 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Selecionar Cartão
+              </label>
+              <select
+                value={selectedCard}
+                onChange={(e) => setSelectedCard(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {creditCards.map((card) => (
+                  <option key={card.id} value={card.id}>
+                    {card.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Chart */}
+          <CreditCardChart
+            creditCardId={selectedCard}
+            userId={user?.id || ''}
+            closingDay={selectedCardData.closing_day}
+          />
+
+          {/* Invoice History Table */}
+          <InvoiceHistoryTable
+            creditCardId={selectedCard}
+            userId={user?.id || ''}
+          />
         </div>
       )}
 

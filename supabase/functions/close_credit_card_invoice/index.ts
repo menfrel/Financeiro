@@ -9,7 +9,7 @@ const corsHeaders = {
 
 interface CloseInvoiceRequest {
   credit_card_id: string;
-  cycle_month: string; // YYYY-MM format
+  cycle_month: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -34,7 +34,6 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
     );
 
-    // Get user from token
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
 
@@ -54,7 +53,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Get credit card info
     const { data: creditCard, error: cardError } = await supabaseClient
       .from("credit_cards")
       .select("*")
@@ -69,19 +67,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Calculate billing cycle dates
     const [year, month] = cycle_month.split("-").map(Number);
     const closingDay = creditCard.closing_day;
     const dueDay = creditCard.due_day;
 
-    // Cycle start: day after closing day of previous month
     const cycleStart = new Date(year, month - 2, closingDay + 1);
-    // Cycle end: closing day of current month
     const cycleEnd = new Date(year, month - 1, closingDay);
-    // Due date: due_day of next month
     const dueDate = new Date(year, month, dueDay);
 
-    // Format dates to YYYY-MM-DD
     const formatDate = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -89,7 +82,6 @@ Deno.serve(async (req: Request) => {
     const cycleEndStr = formatDate(cycleEnd);
     const dueDateStr = formatDate(dueDate);
 
-    // Get all purchases (positive amounts) in this cycle
     const { data: purchases, error: purchasesError } = await supabaseClient
       .from("credit_card_transactions")
       .select("amount")
@@ -106,7 +98,6 @@ Deno.serve(async (req: Request) => {
       0
     );
 
-    // Get all payments (negative amounts) in this cycle
     const { data: payments, error: paymentsError } = await supabaseClient
       .from("credit_card_transactions")
       .select("amount")
@@ -122,7 +113,6 @@ Deno.serve(async (req: Request) => {
       (payments || []).reduce((sum, t) => sum + parseFloat(t.amount as any), 0)
     );
 
-    // Get previous invoice to find outstanding balance
     const { data: previousInvoice, error: prevError } = await supabaseClient
       .from("credit_card_invoices")
       .select("*")
@@ -136,13 +126,11 @@ Deno.serve(async (req: Request) => {
     if (prevError) throw prevError;
 
     const previousBalance = previousInvoice
-      ? Math.max(0, parseFloat(previousInvoice.total_due as any) - parseFloat(previousInvoice.paid_amount as any))
+      ? Math.max(0, parseFloat(previousInvoice.total_due as any) - parseFloat(previousInvoice.paid_amount as any || "0"))
       : 0;
 
-    // Calculate total due
-    const totalDue = purchasesTotal + previousBalance - paymentsTotal;
+    const totalDue = Math.max(0, purchasesTotal + previousBalance - paymentsTotal);
 
-    // Check if invoice already exists
     const { data: existingInvoice, error: existError } = await supabaseClient
       .from("credit_card_invoices")
       .select("id")
@@ -155,7 +143,6 @@ Deno.serve(async (req: Request) => {
     if (existError) throw existError;
 
     if (existingInvoice) {
-      // Update existing invoice
       const { error: updateError } = await supabaseClient
         .from("credit_card_invoices")
         .update({
@@ -170,7 +157,6 @@ Deno.serve(async (req: Request) => {
 
       if (updateError) throw updateError;
     } else {
-      // Create new invoice
       const { error: insertError } = await supabaseClient
         .from("credit_card_invoices")
         .insert({
