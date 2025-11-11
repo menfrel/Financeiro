@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
       .select("*")
       .eq("credit_card_id", credit_card_id)
       .eq("user_id", user.id)
-      .lt("cycle_end", cycleStartStr)
+      .lt("cycle_end", cycleEndStr)
       .order("cycle_end", { ascending: false })
       .limit(1)
       .maybeSingle();

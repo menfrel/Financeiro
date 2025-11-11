@@ -262,13 +262,14 @@ export default function CreditCards() {
       const currentBill = (purchases || []).reduce((sum, t) => sum + Number(t.amount), 0);
       const currentPayments = Math.abs((payments || []).reduce((sum, t) => sum + Number(t.amount), 0));
 
-      // Get the most recent closed invoice BEFORE this cycle to find previous debt
+      // Get the most recent closed invoice that ended before the current cycle ends
+      // This ensures we get the immediately previous billing period
       const { data: previousInvoice, error: prevError } = await supabase
         .from('credit_card_invoices')
         .select('*')
         .eq('credit_card_id', cardId)
         .eq('user_id', user?.id)
-        .lt('cycle_end', cycleStartStr)
+        .lt('cycle_end', cycleEndStr)
         .order('cycle_end', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -1067,13 +1068,6 @@ export default function CreditCards() {
                 </div>
 
               </div>
-
-              {/* Chart */}
-              <CreditCardChart
-                creditCardId={selectedCard}
-                userId={user?.id || ''}
-                closingDay={selectedCardData.closing_day}
-              />
 
               {/* Search */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
