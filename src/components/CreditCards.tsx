@@ -87,6 +87,11 @@ export default function CreditCards() {
 	});
 
 	const [closingInvoice, setClosingInvoice] = useState(false);
+	const [showCloseInvoiceModal, setShowCloseInvoiceModal] = useState(false);
+	const [closeInvoiceForm, setCloseInvoiceForm] = useState({
+		paidAmount: '',
+		paymentDate: new Date().toISOString().split('T')[0]
+	});
 
   useEffect(() => {
     if (user) {
@@ -566,12 +571,16 @@ export default function CreditCards() {
 		}
 	};
 
-	const handleCloseInvoice = async () => {
+	const handleCloseInvoice = async (e: React.FormEvent) => {
+		e.preventDefault();
 		if (!selectedCard) return;
 		setClosingInvoice(true);
 
 		try {
+			const paidAmount = parseFloat(closeInvoiceForm.paidAmount || '0');
 			const cycleMonth = currentMonth.toISOString().split('T')[0].substring(0, 7);
+
+			// Close the invoice
 			const response = await fetch(
 				`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/close_credit_card_invoice`,
 				{
@@ -582,7 +591,8 @@ export default function CreditCards() {
 					},
 					body: JSON.stringify({
 						credit_card_id: selectedCard,
-						cycle_month: cycleMonth
+						cycle_month: cycleMonth,
+						paid_amount: paidAmount
 					})
 				}
 			);
@@ -593,7 +603,31 @@ export default function CreditCards() {
 			}
 
 			const result = await response.json();
+
+			// If a payment was made, create a payment transaction
+			if (paidAmount > 0) {
+				const { error: paymentError } = await supabase
+					.from('credit_card_transactions')
+					.insert({
+						user_id: user?.id,
+						credit_card_id: selectedCard,
+						amount: -paidAmount,
+						description: `Pagamento da fatura - ${cycleMonth}`,
+						date: closeInvoiceForm.paymentDate,
+						installments: 1,
+						current_installment: 1,
+						category_id: null
+					});
+
+				if (paymentError) throw paymentError;
+
+				// Recalculate card balance
+				await recalculateCardBalance(selectedCard);
+			}
+
 			alert('Fatura fechada com sucesso!');
+			setShowCloseInvoiceModal(false);
+			setCloseInvoiceForm({ paidAmount: '', paymentDate: new Date().toISOString().split('T')[0] });
 			fetchTransactions();
 			fetchCreditCards();
 		} catch (error) {
@@ -1001,11 +1035,17 @@ export default function CreditCards() {
                   </button>
                 </div>
                 <button
-                  onClick={handleCloseInvoice}
+                  onClick={() => {
+                    setCloseInvoiceForm({
+                      paidAmount: billingStats.totalToPay.toString(),
+                      paymentDate: new Date().toISOString().split('T')[0]
+                    });
+                    setShowCloseInvoiceModal(true);
+                  }}
                   disabled={closingInvoice}
                   className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium"
                 >
-                  {closingInvoice ? 'Fechando...' : 'Fechar Fatura'}
+                  Fechar Fatura
                 </button>
               </div>
 
@@ -1451,6 +1491,89 @@ export default function CreditCards() {
                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     {editingTransaction ? 'Salvar' : 'Criar Compra'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close Invoice Modal */}
+      {showCloseInvoiceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md my-8 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Fechar Fatura</h2>
+              <form onSubmit={handleCloseInvoice} className="space-y-4">
+                <div className="bg-blue-50 p-4 rounded-lg mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-gray-600">Total da Fatura:</span>
+                    <span className="font-semibold text-blue-900">
+                      {formatCurrency(billingStats.totalToPay)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Período:</span>
+                    <span className="text-sm text-gray-700">
+                      {selectedCardData && formatBillingPeriod(currentMonth, selectedCardData.closing_day)}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Valor Pago
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={closeInvoiceForm.paidAmount}
+                    onChange={(e) => setCloseInvoiceForm({ ...closeInvoiceForm, paidAmount: e.target.value })}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0,00"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Deixe em branco ou 0 se não houve pagamento
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data do Pagamento
+                  </label>
+                  <input
+                    type="date"
+                    value={closeInvoiceForm.paymentDate}
+                    onChange={(e) => setCloseInvoiceForm({ ...closeInvoiceForm, paymentDate: e.target.value })}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="bg-yellow-50 p-3 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Atenção:</strong> Ao fechar a fatura, os valores serão consolidados e um pagamento será registrado automaticamente se você informar um valor.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCloseInvoiceModal(false);
+                      setCloseInvoiceForm({ paidAmount: '', paymentDate: new Date().toISOString().split('T')[0] });
+                    }}
+                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    disabled={closingInvoice}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+                    disabled={closingInvoice}
+                  >
+                    {closingInvoice ? 'Fechando...' : 'Confirmar'}
                   </button>
                 </div>
               </form>

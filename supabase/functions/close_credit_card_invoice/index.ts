@@ -10,6 +10,7 @@ const corsHeaders = {
 interface CloseInvoiceRequest {
   credit_card_id: string;
   cycle_month: string;
+  paid_amount?: number;
 }
 
 Deno.serve(async (req: Request) => {
@@ -44,7 +45,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { credit_card_id, cycle_month }: CloseInvoiceRequest = await req.json();
+    const { credit_card_id, cycle_month, paid_amount }: CloseInvoiceRequest = await req.json();
 
     if (!credit_card_id || !cycle_month) {
       return new Response(
@@ -52,6 +53,8 @@ Deno.serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const paidAmount = paid_amount || 0;
 
     const { data: creditCard, error: cardError } = await supabaseClient
       .from("credit_cards")
@@ -150,6 +153,7 @@ Deno.serve(async (req: Request) => {
           payments_total: paymentsTotal,
           previous_balance: previousBalance,
           total_due: totalDue,
+          paid_amount: paidAmount,
           status: "closed",
         })
         .eq("id", existingInvoice.id)
@@ -169,7 +173,7 @@ Deno.serve(async (req: Request) => {
           payments_total: paymentsTotal,
           previous_balance: previousBalance,
           total_due: totalDue,
-          paid_amount: 0,
+          paid_amount: paidAmount,
           status: "closed",
         });
 
