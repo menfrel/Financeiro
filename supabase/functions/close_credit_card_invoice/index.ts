@@ -128,11 +128,14 @@ Deno.serve(async (req: Request) => {
 
     if (prevError) throw prevError;
 
+    // Get outstanding balance from previous invoice
     const previousBalance = previousInvoice
       ? Math.max(0, parseFloat(previousInvoice.total_due as any) - parseFloat(previousInvoice.paid_amount as any || "0"))
       : 0;
 
-    const totalDue = Math.max(0, purchasesTotal + previousBalance - paymentsTotal);
+    // Correct formula: total_due = previous_balance + (purchases - payments in this period)
+    const currentPeriodBalance = purchasesTotal - paymentsTotal;
+    const totalDue = Math.max(0, previousBalance + currentPeriodBalance);
 
     const { data: existingInvoice, error: existError } = await supabaseClient
       .from("credit_card_invoices")
