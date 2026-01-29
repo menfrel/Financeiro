@@ -48,9 +48,9 @@ export default function CreditCardForm({ onSuccess }: CreditCardFormProps) {
     return (
       <button
         onClick={() => setShowForm(true)}
-        className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
+        className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium flex items-center justify-center gap-2 shadow-sm"
       >
-        <Plus className="w-4 h-4" />
+        <Plus className="w-5 h-5" />
         Novo Cartão
       </button>
     );
@@ -58,47 +58,50 @@ export default function CreditCardForm({ onSuccess }: CreditCardFormProps) {
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold">Novo Cartão de Crédito</h3>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Novo Cartão de Crédito</h3>
+          <p className="text-sm text-gray-600 mt-1">Preencha os dados do seu cartão</p>
+        </div>
         <button
           onClick={() => setShowForm(false)}
-          className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
         >
-          <X className="w-5 h-5 text-gray-500" />
+          <X className="w-5 h-5 text-gray-400" />
         </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             {error}
           </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Nome do Cartão
           </label>
           <input
             type="text"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Ex: Nubank"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Ex: Nubank, Bradesco, etc."
             required
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Limite (R$)
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Limite de Crédito (R$)
           </label>
           <input
             type="number"
             step="0.01"
             value={form.limit_amount}
             onChange={(e) => setForm({ ...form, limit_amount: e.target.value })}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="0,00"
             required
           />
@@ -106,7 +109,7 @@ export default function CreditCardForm({ onSuccess }: CreditCardFormProps) {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Dia de Fechamento
             </label>
             <input
@@ -115,13 +118,14 @@ export default function CreditCardForm({ onSuccess }: CreditCardFormProps) {
               max="31"
               value={form.closing_day}
               onChange={(e) => setForm({ ...form, closing_day: e.target.value })}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="10"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Dia de Vencimento
             </label>
             <input
@@ -130,24 +134,25 @@ export default function CreditCardForm({ onSuccess }: CreditCardFormProps) {
               max="31"
               value={form.due_day}
               onChange={(e) => setForm({ ...form, due_day: e.target.value })}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="15"
               required
             />
           </div>
         </div>
 
-        <div className="flex gap-3 pt-4">
+        <div className="flex gap-3 pt-6 border-t border-gray-200">
           <button
             type="button"
             onClick={() => setShowForm(false)}
-            className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors font-medium"
           >
             {loading ? 'Criando...' : 'Criar Cartão'}
           </button>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { CreditCard, Plus, Search, Trash2, DollarSign } from 'lucide-react';
+import { CreditCard, Plus, Search, Trash2, DollarSign, Edit2 } from 'lucide-react';
 import CreditCardForm from './CreditCardForm';
 import CreditCardTransactionForm from './CreditCardTransactionForm';
 import InvoiceHistoryTable from './InvoiceHistoryTable';
@@ -46,6 +46,15 @@ export default function CreditCards() {
   const [closeInvoiceForm, setCloseInvoiceForm] = useState({
     paidAmount: '',
     paymentDate: new Date().toISOString().split('T')[0]
+  });
+  const [editingCard, setEditingCard] = useState<CreditCardData | null>(null);
+  const [showEditCardModal, setShowEditCardModal] = useState(false);
+  const [updatingCard, setUpdatingCard] = useState(false);
+  const [editCardForm, setEditCardForm] = useState({
+    name: '',
+    limit_amount: '',
+    closing_day: '',
+    due_day: ''
   });
 
   // Load initial data
@@ -156,6 +165,39 @@ export default function CreditCards() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao deletar cartão');
+    }
+  };
+
+  const handleEditCard = (card: CreditCardData) => {
+    setEditingCard(card);
+    setEditCardForm({
+      name: card.name,
+      limit_amount: card.limit_amount.toString(),
+      closing_day: card.closing_day.toString(),
+      due_day: card.due_day.toString()
+    });
+    setShowEditCardModal(true);
+  };
+
+  const handleUpdateCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCard) return;
+
+    setUpdatingCard(true);
+    try {
+      await creditCardService.updateCreditCard(editingCard.id, user?.id || '', {
+        name: editCardForm.name,
+        limit_amount: parseFloat(editCardForm.limit_amount),
+        closing_day: parseInt(editCardForm.closing_day),
+        due_day: parseInt(editCardForm.due_day)
+      });
+      loadCreditCards();
+      setShowEditCardModal(false);
+      setEditingCard(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao atualizar cartão');
+    } finally {
+      setUpdatingCard(false);
     }
   };
 
@@ -279,48 +321,97 @@ export default function CreditCards() {
 
       {activeTab === 'cards' && (
         <div className="space-y-6">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Cartões de Crédito</h2>
+              <p className="text-gray-600 mt-1">Gerencie seus cartões e limites de crédito</p>
+            </div>
+          </div>
+
           <CreditCardForm onSuccess={loadCreditCards} />
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {creditCards.map(card => (
-              <div
-                key={card.id}
-                onClick={() => handleSelectCard(card.id)}
-                className={`p-6 rounded-xl border-2 cursor-pointer transition-all ${
-                  selectedCard === card.id
-                    ? 'border-blue-600 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300 bg-white'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-semibold text-lg">{card.name}</h3>
-                    <p className="text-sm text-gray-500">Limite: {formatCurrency(card.limit_amount)}</p>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteCard(card.id);
-                    }}
-                    className="p-2 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4 text-red-600" />
-                  </button>
-                </div>
+          {creditCards.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+              <CreditCard className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum cartão encontrado</h3>
+              <p className="text-gray-600">Crie seu primeiro cartão para começar</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {creditCards.map(card => (
+                <div
+                  key={card.id}
+                  className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow overflow-hidden"
+                >
+                  <div className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg text-gray-900">{card.name}</h3>
+                        <p className="text-sm text-gray-500 mt-1">Limite de crédito</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditCard(card)}
+                          className="p-2 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Editar cartão"
+                        >
+                          <Edit2 className="w-4 h-4 text-blue-600" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCard(card.id)}
+                          className="p-2 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Deletar cartão"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-600" />
+                        </button>
+                      </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Saldo:</span>
-                    <span className="font-semibold">{formatCurrency(card.current_balance)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Fechamento: {card.closing_day}</span>
-                    <span className="text-gray-600">Vencimento: {card.due_day}</span>
+                    <div className="space-y-4 border-t border-gray-100 pt-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Limite Total</span>
+                        <span className="font-semibold text-lg text-blue-600">{formatCurrency(card.limit_amount)}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Saldo Utilizado</span>
+                        <span className={`font-semibold text-lg ${card.current_balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {formatCurrency(card.current_balance)}
+                        </span>
+                      </div>
+
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-red-600 h-2 rounded-full transition-all"
+                          style={{
+                            width: `${Math.min((card.current_balance / card.limit_amount) * 100, 100)}%`
+                          }}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-2">
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <p className="text-xs text-gray-600">Fechamento</p>
+                          <p className="font-semibold text-gray-900">{card.closing_day}</p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <p className="text-xs text-gray-600">Vencimento</p>
+                          <p className="font-semibold text-gray-900">{card.due_day}</p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleSelectCard(card.id)}
+                        className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium py-2 rounded-lg transition-colors mt-2"
+                      >
+                        Ver Detalhes
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -453,6 +544,93 @@ export default function CreditCards() {
 
       {activeTab === 'history' && selectedCardData && (
         <InvoiceHistoryTable creditCardId={selectedCard} userId={user?.id || ''} />
+      )}
+
+      {showEditCardModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold mb-4">{editingCard ? 'Editar Cartão' : 'Novo Cartão'}</h2>
+              <form onSubmit={handleUpdateCard} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Cartão</label>
+                  <input
+                    type="text"
+                    value={editCardForm.name}
+                    onChange={(e) => setEditCardForm({ ...editCardForm, name: e.target.value })}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Ex: Crédito Pessoal"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Limite de Crédito</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editCardForm.limit_amount}
+                    onChange={(e) => setEditCardForm({ ...editCardForm, limit_amount: e.target.value })}
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0,00"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Dia de Fechamento</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={editCardForm.closing_day}
+                      onChange={(e) => setEditCardForm({ ...editCardForm, closing_day: e.target.value })}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="10"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Dia de Vencimento</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={editCardForm.due_day}
+                      onChange={(e) => setEditCardForm({ ...editCardForm, due_day: e.target.value })}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="15"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditCardModal(false);
+                      setEditingCard(null);
+                    }}
+                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    disabled={updatingCard}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+                    disabled={updatingCard}
+                  >
+                    {updatingCard ? 'Atualizando...' : 'Salvar'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
       )}
 
       {showCloseInvoiceModal && (
